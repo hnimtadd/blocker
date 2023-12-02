@@ -22,18 +22,18 @@ const (
 )
 
 type RPC struct {
-	From    NetAddr
 	Payload io.Reader
+	From    NetAddr
 }
 
 type Message struct {
-	Header MessageType
 	Data   []byte
+	Header MessageType
 }
 
 type DecodedMessage struct {
-	From NetAddr
 	Data any
+	From NetAddr
 }
 
 type RPCDecodeFunc func(RPC) (*DecodedMessage, error)
@@ -41,7 +41,7 @@ type RPCDecodeFunc func(RPC) (*DecodedMessage, error)
 func DefaultDecodeMessageFunc(rpc RPC) (*DecodedMessage, error) {
 	msg := Message{}
 	if err := gob.NewDecoder(rpc.Payload).Decode(&msg); err != nil {
-		return nil, fmt.Errorf("Cannot decode message from rpc %s: %s", rpc.From, err)
+		return nil, fmt.Errorf("cannot decode message from rpc %s: %s", rpc.From, err)
 	}
 	logrus.WithFields(logrus.Fields{
 		"from": rpc.From,
@@ -73,7 +73,7 @@ func DefaultDecodeMessageFunc(rpc RPC) (*DecodedMessage, error) {
 	case MessageTypeRequestBlocks:
 		requestMessage := new(RequestBlocksMessage)
 		if err := gob.NewDecoder(bytes.NewReader(msg.Data)).Decode(requestMessage); err != nil {
-			return nil, fmt.Errorf("Cannot decode request blocks message, err: %s", err.Error())
+			return nil, fmt.Errorf("cannot decode request blocks message, err: %s", err.Error())
 		}
 		// For Request Blocks
 		return &DecodedMessage{
@@ -85,7 +85,7 @@ func DefaultDecodeMessageFunc(rpc RPC) (*DecodedMessage, error) {
 		// For Response Blocks
 		responseMessage := new(ResponseBlocksMessage)
 		if err := gob.NewDecoder(bytes.NewReader(msg.Data)).Decode(responseMessage); err != nil {
-			return nil, fmt.Errorf("Cannot decode reponse blocks message, err: %s", err.Error())
+			return nil, fmt.Errorf("cannot decode reponse blocks message, err: %s", err.Error())
 		}
 		// For Request Blocks
 		return &DecodedMessage{
@@ -96,7 +96,7 @@ func DefaultDecodeMessageFunc(rpc RPC) (*DecodedMessage, error) {
 	case MessageTypeRequestStatus:
 		requestMessage := new(GetStatusMessage)
 		if err := gob.NewDecoder(bytes.NewReader(msg.Data)).Decode(requestMessage); err != nil {
-			return nil, fmt.Errorf("Cannot decode request status message, err: %s", err.Error())
+			return nil, fmt.Errorf("cannot decode request status message, err: %s", err.Error())
 		}
 		// For Request Blocks
 		return &DecodedMessage{
@@ -106,7 +106,7 @@ func DefaultDecodeMessageFunc(rpc RPC) (*DecodedMessage, error) {
 	case MessageTypeResponseStatus:
 		responseMessage := new(StatusMessage)
 		if err := gob.NewDecoder(bytes.NewReader(msg.Data)).Decode(responseMessage); err != nil {
-			return nil, fmt.Errorf("Cannot decode response status message, err: %s", err.Error())
+			return nil, fmt.Errorf("cannot decode response status message, err: %s", err.Error())
 		}
 		// For Request Blocks
 		return &DecodedMessage{

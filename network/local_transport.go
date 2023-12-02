@@ -7,11 +7,11 @@ import (
 )
 
 type LocalTransport struct {
-	addr      NetAddr
+	peers     map[NetAddr]*LocalTransport
 	peerCh    chan Transport
 	consumeCh chan RPC
+	addr      NetAddr
 	lock      sync.RWMutex
-	peers     map[NetAddr]*LocalTransport
 }
 
 func NewLocalTranposrt(addr NetAddr) *LocalTransport {
@@ -29,6 +29,7 @@ func (t *LocalTransport) SetPeerCh(peerCh chan Transport) {
 func (t *LocalTransport) Consume() <-chan RPC {
 	return t.consumeCh
 }
+
 func (t *LocalTransport) Connect(tr Transport) error {
 	trans := tr.(*LocalTransport)
 	t.lock.RLock()
@@ -38,8 +39,8 @@ func (t *LocalTransport) Connect(tr Transport) error {
 		t.peerCh <- tr
 	}()
 	return nil
-
 }
+
 func (t *LocalTransport) SendMessage(to NetAddr, payload []byte) error {
 	t.lock.RLock()
 	defer t.lock.RUnlock()

@@ -53,9 +53,9 @@ func (p *TxPool) PendingCount() int {
 }
 
 type TxSortedMap struct {
-	lock   sync.RWMutex
 	lookup map[types.Hash]*core.Transaction
 	txx    *types.List[*core.Transaction]
+	lock   sync.RWMutex
 }
 
 func NewTxSortedMap() *TxSortedMap {

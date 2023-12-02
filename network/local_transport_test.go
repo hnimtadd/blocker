@@ -9,8 +9,8 @@ import (
 func TestConnect(t *testing.T) {
 	tra := NewLocalTranposrt("A")
 	trb := NewLocalTranposrt("B")
-	tra.Connect(trb)
-	trb.Connect(tra)
+	assert.Nil(t, tra.Connect(trb))
+	assert.Nil(t, trb.Connect(tra))
 	assert.Equal(t, tra.peers[trb.Addr()], trb)
 	assert.Equal(t, trb.peers[tra.Addr()], tra)
 }
@@ -18,8 +18,8 @@ func TestConnect(t *testing.T) {
 func TestSendMessage(t *testing.T) {
 	tra := NewLocalTranposrt("A")
 	trb := NewLocalTranposrt("B")
-	tra.Connect(trb)
-	trb.Connect(tra)
+	assert.Nil(t, tra.Connect(trb))
+	assert.Nil(t, trb.Connect(tra))
 
 	msg := []byte("Hello world!")
 	assert.Nil(t, tra.SendMessage(trb.Addr(), msg))
@@ -45,8 +45,8 @@ func TestBroadcast(t *testing.T) {
 	tra := NewLocalTranposrt("A")
 	trb := NewLocalTranposrt("B")
 	trc := NewLocalTranposrt("C")
-	tra.Connect(trb)
-	tra.Connect(trc)
+	assert.Nil(t, tra.Connect(trb))
+	assert.Nil(t, tra.Connect(trc))
 
 	msg := []byte("Hello world!")
 	assert.Nil(t, tra.Broadcast(msg))
@@ -59,7 +59,7 @@ func TestBroadcast(t *testing.T) {
 	assert.Equal(t, msg, buf)
 	assert.Equal(t, tra.Addr(), rpcb.From)
 
-	buf, n, err = make([]byte, len(msg)), 0, nil
+	buf = make([]byte, len(msg))
 	rpcc := <-trc.Consume()
 	n, err = rpcc.Payload.Read(buf)
 	assert.Nil(t, err)

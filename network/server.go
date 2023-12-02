@@ -18,34 +18,32 @@ const (
 )
 
 type ServerOptions struct {
-	ID         string
-	Version    uint32
-	MaxPoolLen int
-	Logger     log.Logger
-	RPCProcessor
-	RPCDecodeFunc
-	// LocalTransport of this server
-	Transport Transport
-
-	// Seed of peer of this server
-	LocalSeed []Transport
-	PrivKey   *crypto.PrivateKey
-	blockTime time.Duration
+	Logger        log.Logger
+	Transport     Transport // LocalTransport of this server.
+	RPCProcessor  RPCProcessor
+	PrivKey       *crypto.PrivateKey
+	RPCDecodeFunc RPCDecodeFunc
+	ID            string
+	LocalSeed     []Transport
+	MaxPoolLen    int
+	blockTime     time.Duration
+	Version       uint32
 }
 
 type Server struct {
+	peerCh   chan Transport
+	memPool  *TxPool
+	chain    *core.BlockChain
+	peersMap map[NetAddr]Transport
+	rpcCh    chan RPC
+	quitCh   chan struct{}
+
 	ServerOptions
 
-	peerCh      chan Transport
-	blockTime   time.Duration
-	memPool     *TxPool
-	chain       *core.BlockChain
-	peersMap    map[NetAddr]Transport
-	isValidator bool
-	rpcCh       chan RPC
-	quitCh      chan struct{}
+	blockTime time.Duration
 
-	lock sync.RWMutex
+	lock        sync.RWMutex
+	isValidator bool
 }
 
 func NewServer(opts ServerOptions) (*Server, error) {
@@ -78,12 +76,12 @@ func NewServer(opts ServerOptions) (*Server, error) {
 		quitCh:        make(chan struct{}, 1),
 		peersMap:      make(map[NetAddr]Transport),
 	}
-	if sv.ServerOptions.RPCDecodeFunc == nil {
-		sv.ServerOptions.RPCDecodeFunc = DefaultDecodeMessageFunc
+	if sv.RPCDecodeFunc == nil {
+		sv.RPCDecodeFunc = DefaultDecodeMessageFunc
 	}
 
-	if sv.ServerOptions.RPCProcessor == nil {
-		sv.ServerOptions.RPCProcessor = sv
+	if sv.RPCProcessor == nil {
+		sv.RPCProcessor = sv
 	}
 
 	sv.Transport.SetPeerCh(sv.peerCh)
@@ -109,7 +107,9 @@ free:
 			}
 			s.peersMap[peer.Addr()] = peer
 			s.lock.Unlock()
-			peer.Connect(s.Transport)
+			if err := peer.Connect(s.Transport); err != nil {
+				s.Logger.Log("msg", "cannot connect to perr", "err", err.Error())
+			}
 
 			if err := s.sendGetStatusMessage(peer); err != nil {
 				s.Logger.Log("error", err.Error())
@@ -145,6 +145,8 @@ func (s *Server) validatorLoop() {
 			if err := s.createNewBlock(); err != nil {
 				s.Logger.Log("err", err)
 			}
+		default:
+			continue
 		}
 	}
 }
@@ -173,7 +175,6 @@ func (s *Server) send(to NetAddr, msg []byte) error {
 	peer, ok := s.peersMap[to]
 	if !ok {
 		return fmt.Errorf("peer (%s) not connected", to)
-
 	}
 	if err := peer.Send(s.Transport.Addr(), msg); err != nil {
 		s.Logger.Log("error", fmt.Sprintf("peer send error => addr %s [err: %s]", peer.Addr(), err))
@@ -213,7 +214,12 @@ func (s *Server) processTransaction(from NetAddr, tx *core.Transaction) error {
 	// )
 
 	// Need to broadcast this tx to peer
-	go s.broadcastTx(tx)
+	//
+	go func() {
+		if err := s.broadcastTx(tx); err != nil {
+			s.Logger.Log("error", err.Error())
+		}
+	}()
 
 	s.memPool.Add(tx)
 	return nil
@@ -233,7 +239,12 @@ func (s *Server) processBlock(b *core.Block) error {
 		// s.Logger.Log("error", err.Error())
 		return err
 	}
-	go s.broadcastBlock(b)
+
+	go func() {
+		if err := s.broadcastBlock(b); err != nil {
+			s.Logger.Log("error", err.Error())
+		}
+	}()
 	return nil
 }
 
@@ -339,7 +350,11 @@ func (s *Server) createNewBlock() error {
 	if err := s.chain.AddBlock(block); err != nil {
 		return err
 	}
-	go s.broadcastBlock(block)
+	go func() {
+		if err := s.broadcastBlock(block); err != nil {
+			s.Logger.Log("error", err.Error())
+		}
+	}()
 	s.memPool.ClearPending()
 	return nil
 }
