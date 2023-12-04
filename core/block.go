@@ -29,9 +29,10 @@ func (h *Header) Bytes() []byte {
 
 type Block struct {
 	*Header
+	Validator *crypto.PublicKey
+	Signature *crypto.Signature
+
 	Transactions []*Transaction
-	Validator    *crypto.PublicKey
-	Signature    *crypto.Signature
 
 	// Cached version of the header hash
 	hash types.Hash
@@ -48,8 +49,8 @@ func NewGenesisBlock() *Block {
 		},
 		Transactions: []*Transaction{},
 	}
-
 }
+
 func NewBlock(h *Header, txs []*Transaction) (*Block, error) {
 	return &Block{
 		Header:       h,
@@ -71,7 +72,6 @@ func NewBlockFromPrevHeader(prevHeader *Header, txx []*Transaction) (*Block, err
 	}
 
 	return NewBlock(header, txx)
-
 }
 
 func (b *Block) AddTransaction(tx *Transaction) {
@@ -79,7 +79,7 @@ func (b *Block) AddTransaction(tx *Transaction) {
 }
 
 func (b *Block) Sign(privKey *crypto.PrivateKey) error {
-	sig := privKey.Sign(b.Header.Bytes())
+	sig := privKey.Sign(b.Bytes())
 	b.Validator = privKey.Public()
 	b.Signature = sig
 	return nil
@@ -90,8 +90,8 @@ func (b *Block) Verify() error {
 		return fmt.Errorf("Block are not signed")
 	}
 
-	if !b.Signature.Verify(b.Validator, b.Header.Bytes()) {
-		return fmt.Errorf("Cannot verify with pubkey")
+	if !b.Signature.Verify(b.Validator, b.Bytes()) {
+		return fmt.Errorf("cannot verify with pubkey")
 	}
 	for _, tx := range b.Transactions {
 		if err := tx.Verify(); err != nil {
@@ -112,6 +112,7 @@ func (b *Block) Verify() error {
 func (b *Block) Encode(encoder Encoder[*Block]) error {
 	return encoder.Encode(b)
 }
+
 func (b *Block) Decode(decoder Decoder[*Block]) error {
 	return decoder.Decode(b)
 }

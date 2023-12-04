@@ -7,14 +7,15 @@ import (
 )
 
 type Transaction struct {
-	Data      []byte
 	From      *crypto.PublicKey
 	Signature *crypto.Signature
 
-	// Cached hash version of transaction
-	hash types.Hash
+	Data []byte
 	// UNIX Nano, first time this transaction be seen locally
 	timeStamp int64
+
+	// Cached hash version of transaction
+	hash types.Hash
 }
 
 func NewTransaction(data []byte) *Transaction {
@@ -22,6 +23,7 @@ func NewTransaction(data []byte) *Transaction {
 		Data: data,
 	}
 }
+
 func (tx *Transaction) Sign(privKey *crypto.PrivateKey) error {
 	sig := privKey.Sign(tx.Data)
 	tx.From = privKey.Public()
@@ -38,10 +40,10 @@ func (tx *Transaction) Hash(hasher Hasher[*Transaction]) types.Hash {
 
 func (tx *Transaction) Verify() error {
 	if tx.Signature == nil || tx.From == nil {
-		return fmt.Errorf("Trannsaction has no signature")
+		return fmt.Errorf("trannsaction has no signature")
 	}
 	if !tx.Signature.Verify(tx.From, tx.Data) {
-		return fmt.Errorf("Invalid tracsaction signature")
+		return fmt.Errorf("invalid tracsaction signature")
 	}
 	return nil
 }
@@ -49,6 +51,7 @@ func (tx *Transaction) Verify() error {
 func (tx *Transaction) Encode(enc Encoder[*Transaction]) error {
 	return enc.Encode(tx)
 }
+
 func (tx *Transaction) Decode(dnc Decoder[*Transaction]) error {
 	return dnc.Decode(tx)
 }

@@ -77,10 +77,7 @@ func TestEncodeDecodeBlock(t *testing.T) {
 }
 
 func RandomBlock(t *testing.T, height uint32, prevBlockHash types.Hash) *Block {
-
-	var (
-		privKey = crypto.GeneratePrivateKey()
-	)
+	privKey := crypto.GeneratePrivateKey()
 	tx := RandomTxWithSignature(t)
 	h := &Header{
 		Version:       1,
@@ -93,7 +90,7 @@ func RandomBlock(t *testing.T, height uint32, prevBlockHash types.Hash) *Block {
 
 	dataHash, err := CalculateDataHash(b.Transactions)
 	assert.Nil(t, err)
-	b.Header.DataHash = dataHash
+	b.DataHash = dataHash
 	assert.Nil(t, b.Sign(privKey))
 	return b
 }

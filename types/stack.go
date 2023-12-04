@@ -1,20 +1,22 @@
 package types
 
-type Stack[T any] struct {
-	data []T
+import "fmt"
+
+type Stack struct {
+	data []any
 }
 
-func NewStack[T any]() *Stack[T] {
-	return &Stack[T]{
-		data: []T{},
+func NewStack() *Stack {
+	return &Stack{
+		data: []any{},
 	}
 }
 
-func (l *Stack[T]) Push(v T) {
+func (l *Stack) Push(v any) {
 	l.data = append(l.data, v)
 }
 
-func (l *Stack[T]) Pop() (v T) {
+func (l *Stack) Pop() (v any) {
 	if l.Len() == 0 {
 		return
 	}
@@ -23,6 +25,10 @@ func (l *Stack[T]) Pop() (v T) {
 	return v
 }
 
-func (l *Stack[T]) Len() int {
+func (l *Stack) Len() int {
 	return len(l.data)
+}
+
+func (l Stack) String() string {
+	return fmt.Sprintf("stack:\n=>data: %+v\n=>len: %d\n", l.data, l.Len())
 }
