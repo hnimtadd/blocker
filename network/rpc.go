@@ -22,8 +22,28 @@ const (
 )
 
 type RPC struct {
-	Payload io.Reader
 	From    NetAddr
+	Payload []byte
+}
+
+func (rpc *RPC) Bytes() []byte {
+	b := &bytes.Buffer{}
+
+	if err := gob.NewEncoder(b).Encode(rpc); err != nil {
+		panic(fmt.Sprintf("rpc: cannot encode to bytes, err: %s", err.Error()))
+	}
+	return b.Bytes()
+}
+
+func RPCFromBytes(buf io.Reader) RPC {
+	rpc := &RPC{}
+	if err := gob.NewDecoder(buf).Decode(rpc); err != nil {
+		panic(fmt.Sprintf("rpc: cannot decode from bytes, err: %s", err.Error()))
+	}
+	return RPC{
+		From:    rpc.From,
+		Payload: rpc.Payload,
+	}
 }
 
 type Message struct {
@@ -40,9 +60,10 @@ type RPCDecodeFunc func(RPC) (*DecodedMessage, error)
 
 func DefaultDecodeMessageFunc(rpc RPC) (*DecodedMessage, error) {
 	msg := Message{}
-	if err := gob.NewDecoder(rpc.Payload).Decode(&msg); err != nil {
+	if err := gob.NewDecoder(bytes.NewBuffer(rpc.Payload)).Decode(&msg); err != nil {
 		return nil, fmt.Errorf("cannot decode message from rpc %s: %s", rpc.From, err)
 	}
+
 	logrus.WithFields(logrus.Fields{
 		"from": rpc.From,
 		"type": msg.Header,

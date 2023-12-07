@@ -14,8 +14,6 @@ func TestServerOptions(t *testing.T) {
 
 	fmt.Printf("Logger: %d, padd: %d\n", unsafe.Sizeof(opt.Logger), unsafe.Offsetof(opt.Logger))
 
-	fmt.Printf("Transport: %d, padd: %d\n", unsafe.Sizeof(opt.Transport), unsafe.Offsetof(opt.Transport))
-
 	fmt.Printf("Priv: %d, padd: %d\n", unsafe.Sizeof(opt.PrivKey), unsafe.Offsetof(opt.PrivKey))
 
 	fmt.Printf("BlockTime: %d, padd: %d\n", unsafe.Sizeof(opt.blockTime), unsafe.Offsetof(opt.blockTime))

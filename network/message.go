@@ -4,6 +4,7 @@ import (
 	"blocker/core"
 	"bytes"
 	"encoding/gob"
+	"fmt"
 )
 
 type RequestBlocksMessage struct {
@@ -34,7 +35,7 @@ func (msg *ResponseBlocksMessage) Bytes() []byte {
 	return buf.Bytes()
 }
 
-type GetStatusMessage struct{
+type GetStatusMessage struct {
 	// The ID of the request
 	ID string
 }
@@ -57,7 +58,7 @@ type StatusMessage struct {
 func (msg *StatusMessage) Bytes() []byte {
 	buf := &bytes.Buffer{}
 	if err := gob.NewEncoder(buf).Encode(msg); err != nil {
-		panic(err)
+		panic(fmt.Sprintf("status message: cannot encode to bytes, err: %s", err.Error()))
 	}
 	return buf.Bytes()
 }

@@ -1,90 +1,107 @@
 package network
 
 import (
-	"bytes"
 	"fmt"
 	"sync"
 )
 
 type LocalTransport struct {
-	peers     map[NetAddr]*LocalTransport
-	peerCh    chan Transport
-	consumeCh chan RPC
-	addr      NetAddr
-	lock      sync.RWMutex
+	peerCh chan Peer
+	rpcCh  chan RPC
+	peers  map[NetAddr]*LocalPeer
+	addr   NetAddr
+	lock   sync.RWMutex
 }
 
 func NewLocalTranposrt(addr NetAddr) *LocalTransport {
-	return &LocalTransport{
-		addr:      addr,
-		consumeCh: make(chan RPC, 1024),
-		peers:     make(map[NetAddr]*LocalTransport),
+	tr := &LocalTransport{
+		addr:   addr,
+		peers:  make(map[NetAddr]*LocalPeer),
+		peerCh: make(chan Peer, 1024),
+		rpcCh:  make(chan RPC, 1024),
 	}
+	var _ Transport = tr
+	return tr
 }
 
-func (t *LocalTransport) SetPeerCh(peerCh chan Transport) {
-	t.peerCh = peerCh
+// func (t *LocalTransport) SetPeerCh(peerCh chan<- Peer) {
+// 	t.peerCh = peerCh
+// }
+
+func (t *LocalTransport) ConsumeRPC() <-chan RPC {
+	return t.rpcCh
 }
 
-func (t *LocalTransport) Consume() <-chan RPC {
-	return t.consumeCh
-}
-
-func (t *LocalTransport) Connect(tr Transport) error {
-	trans := tr.(*LocalTransport)
-	t.lock.RLock()
-	defer t.lock.RUnlock()
-	t.peers[tr.Addr()] = trans
-	go func() {
-		t.peerCh <- tr
-	}()
-	return nil
-}
-
-func (t *LocalTransport) SendMessage(to NetAddr, payload []byte) error {
-	t.lock.RLock()
-	defer t.lock.RUnlock()
-	if t.addr == to {
-		return nil
-	}
-	peer, ok := t.peers[to]
-	if !ok {
-		return fmt.Errorf("%s: could not send message to unknow peer %s", t.addr, to)
-	}
-	peer.consumeCh <- RPC{
-		From:    t.addr,
-		Payload: bytes.NewReader(payload),
-	}
-	return nil
+func (t *LocalTransport) ConsumePeer() <-chan Peer {
+	return t.peerCh
 }
 
 func (t *LocalTransport) Addr() NetAddr {
 	return t.addr
 }
 
+func (t *LocalTransport) Send(to NetAddr, payload []byte) error {
+	if to == t.Addr() {
+		return nil
+	}
+	peer, ok := t.peers[to]
+	if !ok {
+		return fmt.Errorf("local transport, peer: (%s) not found", to)
+	}
+	return peer.Accept(t.Addr(), payload)
+}
+
 func (t *LocalTransport) Broadcast(payload []byte) error {
 	for _, peer := range t.peers {
-		if err := t.SendMessage(peer.addr, payload); err != nil {
-			return err
+		if err := peer.Accept(t.Addr(), payload); err != nil {
+			fmt.Printf("error: %s,", fmt.Sprintf("peer send error => addr %s [err: %s]", peer.Addr(), err))
 		}
 	}
 	return nil
 }
 
-func (t *LocalTransport) Accept(from Transport) error {
-	go func() {
-		t.peerCh <- from
-	}()
+func (t *LocalTransport) Accept(from NetAddr, payload []byte) error {
+	t.rpcCh <- RPC{
+		From:    from,
+		Payload: payload,
+	}
 	return nil
 }
 
-func (t *LocalTransport) Send(from NetAddr, payload []byte) error {
-	if from == t.Addr() {
-		return nil
+func (t *LocalTransport) Dial(addr NetAddr) error {
+	peer := &LocalPeer{
+		rpcCh: t.rpcCh,
 	}
-	t.consumeCh <- RPC{
+	t.lock.Lock()
+	defer t.lock.Unlock()
+	t.peers[peer.Addr()] = peer
+	t.peerCh <- peer
+	return nil
+}
+
+type LocalPeer struct {
+	rpcCh chan<- RPC
+	addr  NetAddr
+}
+
+func NewLocalPeer(addr NetAddr) *LocalPeer {
+	return &LocalPeer{
+		addr: addr,
+	}
+}
+
+func (p *LocalPeer) SetRPCCh(rpcCh chan<- RPC) {
+	p.rpcCh = rpcCh
+}
+
+func (p *LocalPeer) Accept(from NetAddr, payload []byte) error {
+	p.rpcCh <- RPC{
 		From:    from,
-		Payload: bytes.NewReader(payload),
+		Payload: payload,
 	}
 	return nil
+}
+
+func (p *LocalPeer) Addr() NetAddr {
+	return p.addr
 }
