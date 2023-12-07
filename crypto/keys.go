@@ -30,6 +30,7 @@ func GeneratePrivateKeyFromString(str string) *PrivateKey {
 		key: ed25519.NewKeyFromSeed(seed),
 	}
 }
+
 func GeneratePrivateKeyWithSeed(seed []byte) *PrivateKey {
 	if len(seed) != seedLen {
 		panic(fmt.Sprintf("Seed length not valid, must be %d", seedLen))
@@ -38,6 +39,7 @@ func GeneratePrivateKeyWithSeed(seed []byte) *PrivateKey {
 		key: ed25519.NewKeyFromSeed(seed),
 	}
 }
+
 func GeneratePrivateKey() *PrivateKey {
 	seed := make([]byte, seedLen)
 	_, err := io.ReadFull(rand.Reader, seed)
@@ -47,7 +49,6 @@ func GeneratePrivateKey() *PrivateKey {
 	return &PrivateKey{
 		key: ed25519.NewKeyFromSeed(seed),
 	}
-
 }
 
 func (p *PrivateKey) Bytes() []byte {

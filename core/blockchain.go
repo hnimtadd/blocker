@@ -59,7 +59,7 @@ func (bc *BlockChain) addBlockWithoutValidation(b *Block) error {
 	bc.logger.Log(
 		"msg", "new block",
 		"height", b.Height,
-		"hash", b.Hash(BlockHasher{}),
+		"hash", fmt.Sprintf("%x", b.Hash(BlockHasher{}).Bytes()[:3]),
 		"transactions", len(b.Transactions),
 	)
 	return bc.store.Put(b)

@@ -19,7 +19,6 @@ func NewBlockValidator(bc *BlockChain) *BlockValidator {
 func (v *BlockValidator) Validate(block *Block) error {
 	if v.bc.HasBlock(block.Height) {
 		return fmt.Errorf("Block (%s) with height (%d) existed", block.Hash(BlockHasher{}), block.Height)
-		// panic(err)
 	}
 
 	if v.bc.Height()+1 != block.Height {
