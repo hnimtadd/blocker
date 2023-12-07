@@ -4,6 +4,7 @@ import (
 	"bytes"
 	"fmt"
 	"io"
+	"log"
 	"net"
 	"sync"
 )
@@ -13,21 +14,22 @@ type TCPTransport struct {
 	peers    map[NetAddr]*TCPPeer
 	peerCh   chan Peer
 	rpcCh    chan RPC // rpc Chan from the node
+	nodeID   string   // Unique identify for this node
 	lock     sync.Mutex
 }
 
-func NewTCPTransport(addr NetAddr) *TCPTransport {
+func NewTCPTransport(nodeID string, addr NetAddr) *TCPTransport {
 	listener, err := net.Listen("tcp", string(addr))
 	if err != nil {
 		panic(fmt.Sprintf("cannot bootstrap the listenr at addr (%s)", string(addr)))
 	}
 	tcpTransport := &TCPTransport{
+		nodeID:   nodeID,
 		listener: listener,
 		peers:    make(map[NetAddr]*TCPPeer),
 		rpcCh:    make(chan RPC, 1024),
 		peerCh:   make(chan Peer, 1024),
 	}
-
 	var _ Transport = tcpTransport
 	go tcpTransport.readLoop()
 	return tcpTransport
@@ -41,14 +43,6 @@ func (t *TCPTransport) ConsumePeer() <-chan Peer {
 	return t.peerCh
 }
 
-// func (t *TCPTransport) SetRPCCh(rpcCh chan<- RPC) {
-// 	t.rpcCh = rpcCh
-// }
-
-// func (t *TCPTransport) SetPeerCh(peerCh chan<- Peer) {
-// 	t.peerCh = peerCh
-// }
-
 func (t *TCPTransport) Send(to NetAddr, payload []byte) error {
 	// send the payload to the conn that this tcp are listen to
 	// create RPC and send
@@ -60,10 +54,16 @@ func (t *TCPTransport) Send(to NetAddr, payload []byte) error {
 	}
 	peer, ok := t.peers[to]
 	if !ok {
+		log.Panicf("[NODE] %s, send to peer [%s] not found, current peers: %v", t.Addr(), to, t.peers)
 		return nil
 	}
-
 	return peer.Accept(t.Addr(), payload)
+
+	// if to == nil {
+	// 	return nil
+	// }
+	// fmt.Printf("[NODE] %s send payload to [%s]\n", t.Addr(), to.Addr())
+	// return to.Accept(t.Addr(), payload)
 }
 
 func (t *TCPTransport) Broadcast(payload []byte) error {
@@ -79,8 +79,9 @@ func (t *TCPTransport) Broadcast(payload []byte) error {
 }
 
 func (t *TCPTransport) Addr() NetAddr {
-	addr := NetAddr(t.listener.Addr().String())
-	return addr
+	return NetAddr(t.nodeID)
+	// addr := NetAddr(t.listener.Addr().String())
+	// return addr
 }
 
 func (t *TCPTransport) Dial(addr NetAddr) error {
@@ -88,23 +89,37 @@ func (t *TCPTransport) Dial(addr NetAddr) error {
 	if err != nil {
 		return err
 	}
-	peer := NewTCPPeer(conn, true)
+	// TODO: Dial Handshake logic
+	node, err := DefaultTPCHandshake(t, conn)
+	if err != nil {
+		return err
+	}
+	peer := NewTCPPeer(node.ID, conn, true)
 	t.lock.Lock()
 	defer t.lock.Unlock()
-	t.peers[addr] = peer
+	t.peers[peer.Addr()] = peer
+	fmt.Printf("[NODE] %s add new peer at [%s]\n", t.Addr(), peer.Addr())
 	peer.SetRPCCh(t.rpcCh)
 	t.peerCh <- peer
 	return nil
 }
 
 func (t *TCPTransport) readLoop() {
+	fmt.Printf("[NODE] %s reading loop\n", t.Addr())
 	for {
 		conn, err := t.listener.Accept()
 		if err != nil {
 			panic(fmt.Sprintf("server: cannot accept new conn, err: %s", err.Error()))
 		}
-		peer := NewTCPPeer(conn, false)
-		// fmt.Printf("new peer from: %s\n", peer.Addr())
+
+		// TODO: Reply handshake logic
+		node, err := DefaultHandshakeReply(conn, t)
+		if err != nil {
+			log.Printf("[NODE] %s, error while reply handshake from conn, err: (%s)\n", t.Addr(), err.Error())
+			continue
+		}
+		peer := NewTCPPeer(node.ID, conn, false)
+		fmt.Printf("[NODE] %s add peer from: [%s]\n", t.Addr(), peer.Addr())
 		peer.SetRPCCh(t.rpcCh)
 		t.peerCh <- peer
 		t.peers[peer.Addr()] = peer
@@ -112,14 +127,15 @@ func (t *TCPTransport) readLoop() {
 }
 
 type TCPPeer struct {
-	conn  net.Conn
-	rpcCh chan<- RPC
-	// outbound peer, if we retrive the conn, then the conn is inbound, else outbound.
-	outbound bool
+	conn     net.Conn
+	rpcCh    chan<- RPC
+	nodeID   string // Identify of the node in the other side of the conn
+	outbound bool   // outbound peer, if we retrive the conn, then the conn is inbound, else outbound.
 }
 
-func NewTCPPeer(conn net.Conn, outbound bool) *TCPPeer {
+func NewTCPPeer(nodeID string, conn net.Conn, outbound bool) *TCPPeer {
 	tcpPeer := &TCPPeer{
+		nodeID:   nodeID,
 		conn:     conn,
 		outbound: outbound,
 	}
@@ -132,7 +148,6 @@ func (p *TCPPeer) Accept(from NetAddr, payload []byte) error {
 	if from == p.Addr() {
 		return nil
 	}
-
 	rpc := RPC{
 		From:    from,
 		Payload: payload,
@@ -145,7 +160,6 @@ func (p *TCPPeer) Accept(from NetAddr, payload []byte) error {
 	if int(n) != len(rpcBytes) {
 		panic(fmt.Errorf("tcp peer: given payload with len (%d), sent (%d)", len(payload), n))
 	}
-	fmt.Printf("%s, writed to %s\n", from, p.Addr())
 	return nil
 }
 
@@ -153,22 +167,20 @@ func (p *TCPPeer) SetRPCCh(rpcCh chan<- RPC) {
 	p.rpcCh = rpcCh
 }
 
+// TODO: should connect to the node
 func (p *TCPPeer) Addr() NetAddr {
-	addr := NetAddr(p.conn.LocalAddr().String())
-	return addr
+	return NetAddr(p.nodeID)
+	// addr := NetAddr(p.conn.RemoteAddr().String())
+	// return addr
 }
 
 func (t *TCPPeer) readLoop() {
 	defer t.conn.Close()
-	// fmt.Printf("%s reading loop\n", t.Addr())
+	fmt.Printf("[PEER] %s reading loop\n", t.Addr())
 	for {
 		buf := make([]byte, 1024)
 		n, err := t.conn.Read(buf)
 		if err != nil {
-			// if err == io.EOF {
-			// 	fmt.Println("tcp peer: connection closed")
-			// 	return
-			// }
 			panic(fmt.Sprintf("tcp peer: read from connection failed, err: %s", err.Error()))
 		}
 		// Buf should be bytes of RPC

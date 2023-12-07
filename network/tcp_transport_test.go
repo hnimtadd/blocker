@@ -9,8 +9,8 @@ import (
 )
 
 func TestTCPTransport(t *testing.T) {
-	tr1, rpcCh1, peerCh1 := initTCPTransport(":3000")
-	_, rpcCh2, peerCh2 := initTCPTransport(":3001")
+	tr1, rpcCh1, peerCh1 := initTCPTransport("NODE_1", ":3000")
+	_, rpcCh2, peerCh2 := initTCPTransport("NODE_2", ":3001")
 
 	payload := []byte("Hello, world!")
 	go func() {
@@ -37,8 +37,8 @@ func TestTCPTransport(t *testing.T) {
 	}
 }
 
-func initTCPTransport(addr NetAddr) (*TCPTransport, <-chan RPC, <-chan Peer) {
-	tcpTransport := NewTCPTransport(addr)
+func initTCPTransport(ID string, addr NetAddr) (*TCPTransport, <-chan RPC, <-chan Peer) {
+	tcpTransport := NewTCPTransport(ID, addr)
 	rpcCh := tcpTransport.ConsumeRPC()
 	peerCh := tcpTransport.ConsumePeer()
 	return tcpTransport, rpcCh, peerCh

@@ -104,8 +104,7 @@ free:
 				s.Logger.Log("error", err.Error())
 				continue
 			}
-
-			// s.Logger.Log("msg", "peer added to the server", "addr", peer.Addr())
+			s.Logger.Log("msg", "peer added to the server", "addr", peer.Addr())
 
 		case rpc := <-s.rpcCh:
 			msg, err := s.RPCDecodeFunc(rpc)
@@ -331,5 +330,6 @@ func (s *Server) sendGetStatusMessage(toPeer Peer) error {
 		ID: s.ID,
 	}
 	msg := NewMesage(MessageTypeRequestStatus, requestMessage.Bytes())
+	s.Logger.Log("action", "send get status message", "to", toPeer.Addr())
 	return s.Transport.Send(toPeer.Addr(), msg.Bytes())
 }

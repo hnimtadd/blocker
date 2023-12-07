@@ -36,7 +36,7 @@ func (msg *ResponseBlocksMessage) Bytes() []byte {
 }
 
 type GetStatusMessage struct {
-	// The ID of the request
+	// The ID of the requester
 	ID string
 }
 
