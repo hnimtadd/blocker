@@ -5,59 +5,44 @@ import (
 	"blocker/crypto"
 	"blocker/network"
 	"bytes"
-	"fmt"
 	"time"
 )
 
 func main() {
-	trLocal := network.NewLocalTranposrt("LOCAL")
-	trRemoteA := network.NewLocalTranposrt("REMOTE_A")
-	trRemoteB := network.NewLocalTranposrt("REMOTE_B")
-	trRemoteC := network.NewLocalTranposrt("REMOTE_C")
+	trLocal := network.NewTCPTransport("LOCAL", ":3000")
+	trRemoteA := network.NewTCPTransport("REMOTE_A", ":3001")
 
 	go func() {
-		time.Sleep(time.Second)
-		serverA := makeServer("REMOTE_A", trRemoteA, []network.Transport{trLocal}, nil)
+		// Late node
+		time.Sleep(time.Second * 10)
+		serverA := makeTCPServer(trRemoteA, []string{":3000"}, nil)
 		serverA.Start()
 	}()
 
-	go func() {
-		time.Sleep(time.Second * 2)
-		serverB := makeServer("REMOTE_B", trRemoteB, []network.Transport{trRemoteA}, nil)
-		serverB.Start()
-	}()
-	go func() {
-		time.Sleep(time.Second * 3)
-		serverC := makeServer("REMOTE_C", trRemoteC, []network.Transport{trRemoteB}, nil)
-		serverC.Start()
-	}()
-
-	go func() {
-		time.Sleep(time.Second * 10)
-		trLate := network.NewLocalTranposrt("REMOTE_LATE")
-		sLate := makeServer(string(trLate.Addr()), trLate, []network.Transport{trRemoteC}, nil)
-		sLate.Start()
-	}()
-
-	go func() {
-		for {
-			if err := sendTransaction(trLocal, trRemoteA); err != nil {
-				fmt.Println(err)
-			}
-			time.Sleep(time.Second * 2)
-		}
-	}()
-
 	privKey := crypto.GeneratePrivateKey()
-	server := makeServer("LOCAL", trLocal, []network.Transport{}, privKey)
+	server := makeServer(trLocal, []network.Peer{}, privKey)
 	server.Start()
 }
 
-func makeServer(id string, tr network.Transport, seed []network.Transport, privKey *crypto.PrivateKey) *network.Server {
+func makeTCPServer(node network.Transport, tcpSeed []string, privKey *crypto.PrivateKey) *network.Server {
 	opt := network.ServerOptions{
-		ID:        id,
+		Transport: node,
+		ID:        string(node.Addr()),
 		PrivKey:   privKey,
-		Transport: tr,
+		TCPSeed:   tcpSeed,
+	}
+	server, err := network.NewServer(opt)
+	if err != nil {
+		panic(err)
+	}
+	return server
+}
+
+func makeServer(node network.Transport, seed []network.Peer, privKey *crypto.PrivateKey) *network.Server {
+	opt := network.ServerOptions{
+		Transport: node,
+		ID:        string(node.Addr()),
+		PrivKey:   privKey,
 		LocalSeed: seed,
 	}
 	server, err := network.NewServer(opt)
