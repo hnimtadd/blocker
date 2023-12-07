@@ -94,3 +94,8 @@ func (s *Signature) Bytes() []byte {
 func (s *Signature) Verify(pubKey *PublicKey, msg []byte) bool {
 	return ed25519.Verify(pubKey.Key, msg, s.Value)
 }
+
+func (s *Signature) String() string {
+	b := sha256.Sum256(s.Value)
+	return hex.EncodeToString(b[:])
+}

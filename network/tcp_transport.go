@@ -89,7 +89,6 @@ func (t *TCPTransport) Dial(addr NetAddr) error {
 	if err != nil {
 		return err
 	}
-	// TODO: Dial Handshake logic
 	node, err := DefaultTPCHandshake(t, conn)
 	if err != nil {
 		return err
@@ -112,7 +111,6 @@ func (t *TCPTransport) readLoop() {
 			panic(fmt.Sprintf("server: cannot accept new conn, err: %s", err.Error()))
 		}
 
-		// TODO: Reply handshake logic
 		node, err := DefaultHandshakeReply(conn, t)
 		if err != nil {
 			log.Printf("[NODE] %s, error while reply handshake from conn, err: (%s)\n", t.Addr(), err.Error())
@@ -167,7 +165,6 @@ func (p *TCPPeer) SetRPCCh(rpcCh chan<- RPC) {
 	p.rpcCh = rpcCh
 }
 
-// TODO: should connect to the node
 func (p *TCPPeer) Addr() NetAddr {
 	return NetAddr(p.nodeID)
 	// addr := NetAddr(p.conn.RemoteAddr().String())

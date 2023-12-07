@@ -1,6 +1,7 @@
 package network
 
 import (
+	"blocker/api"
 	"blocker/core"
 	"blocker/crypto"
 	"bytes"
@@ -88,6 +89,17 @@ func NewServer(opts ServerOptions) (*Server, error) {
 	if sv.Transport != nil {
 		sv.rpcCh = sv.Transport.ConsumeRPC()
 		sv.peerCh = sv.Transport.ConsumePeer()
+	}
+
+	if sv.Addr != "" {
+		// Init API Server with this server
+		opts := api.ServerOpts{
+			Addr: sv.Addr,
+		}
+		apiServer := api.NewServer(sv.chain, opts)
+		go func() {
+			panic(fmt.Sprintf("error while serving JSON: %v", apiServer.Start()))
+		}()
 	}
 	return sv, nil
 }

@@ -20,7 +20,7 @@ func main() {
 	}()
 
 	privKey := crypto.GeneratePrivateKey()
-	server := makeServer(trLocal, []network.Peer{}, privKey)
+	server := makeServer(":8080", trLocal, []network.Peer{}, privKey)
 	server.Start()
 }
 
@@ -38,10 +38,11 @@ func makeTCPServer(node network.Transport, tcpSeed []string, privKey *crypto.Pri
 	return server
 }
 
-func makeServer(node network.Transport, seed []network.Peer, privKey *crypto.PrivateKey) *network.Server {
+func makeServer(apiAddr string, node network.Transport, seed []network.Peer, privKey *crypto.PrivateKey) *network.Server {
 	opt := network.ServerOptions{
 		Transport: node,
 		ID:        string(node.Addr()),
+		Addr:      apiAddr,
 		PrivKey:   privKey,
 		LocalSeed: seed,
 	}

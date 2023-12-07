@@ -71,7 +71,6 @@ func AMessageFromBytes(payload []byte) AMessage {
 func DefaultTPCHandshake(fromNode Transport, conn net.Conn) (Node, error) {
 	// This method should be conn after dial to other node from fromNode.
 	// This should ask the other node the ID of the node and then create peer from this node with that ID
-	// TODO: define handshake logic here, send SYN -> Reply with SYNACK -> Reply with ACK
 	syn := SMessage{
 		FromID: string(fromNode.Addr()),
 	}
