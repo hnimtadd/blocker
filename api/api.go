@@ -2,6 +2,7 @@ package api
 
 import (
 	"blocker/core"
+	"encoding/gob"
 	"net/http"
 	"strconv"
 
@@ -54,4 +55,13 @@ func toJSONBlock(block *core.Block) (JSONBlock, error) {
 		Height:        block.Height,
 		Version:       block.Version,
 	}, nil
+}
+
+func (s *Server) SendTransactionHandler(c echo.Context) error {
+	transaction := new(core.Transaction)
+	if err := gob.NewDecoder(c.Request().Body).Decode(transaction); err != nil {
+		return c.JSON(http.StatusBadRequest, echo.Map{"error": err.Error()})
+	}
+	s.txChan <- transaction
+	return nil
 }
