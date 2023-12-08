@@ -36,6 +36,9 @@ func NewVM(data []byte, state *State) *VM {
 }
 
 func (vm *VM) Run() error {
+	if len(vm.data) == 0 {
+		return nil
+	}
 	for {
 		instr := Instruction(vm.data[vm.ip])
 		if err := vm.ExecInstruction(instr); err != nil {

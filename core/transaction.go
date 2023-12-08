@@ -4,23 +4,22 @@ import (
 	"blocker/crypto"
 	"blocker/types"
 	"fmt"
+	"math/rand"
 )
 
 type Transaction struct {
 	From      *crypto.PublicKey
 	Signature *crypto.Signature
-
-	Data []byte
-	// UNIX Nano, first time this transaction be seen locally
-	timeStamp int64
-
-	// Cached hash version of transaction
-	hash types.Hash
+	Data      []byte
+	timeStamp int64      // UNIX Nano, first time this transaction be seen locally
+	hash      types.Hash // Cached hash version of transaction
+	Nonce     uint64
 }
 
 func NewTransaction(data []byte) *Transaction {
 	return &Transaction{
-		Data: data,
+		Data:  data,
+		Nonce: rand.Uint64(), // TODO: find better way to handle Nonce of user
 	}
 }
 
