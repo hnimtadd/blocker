@@ -8,7 +8,6 @@ import (
 	"fmt"
 	"net"
 	"os"
-	"sync"
 	"time"
 
 	"github.com/go-kit/log"
@@ -41,9 +40,9 @@ type Server struct {
 	chain         *core.BlockChain
 	memPool       *TxPool
 	quitCh        chan struct{}
+	txChan        chan *core.Transaction
 	ServerOptions               // Embed ServerOptions
 	blockTime     time.Duration // duration of generating new blokc
-	lock          sync.RWMutex
 	isValidator   bool
 }
 
@@ -73,6 +72,7 @@ func NewServer(opts ServerOptions) (*Server, error) {
 		chain:         chain,
 		isValidator:   opts.PrivKey != nil,
 		quitCh:        make(chan struct{}, 1),
+		txChan:        make(chan *core.Transaction, 1024),
 	}
 	if sv.RPCDecodeFunc == nil {
 		sv.RPCDecodeFunc = DefaultDecodeMessageFunc
@@ -96,7 +96,7 @@ func NewServer(opts ServerOptions) (*Server, error) {
 		opts := api.ServerOpts{
 			Addr: sv.Addr,
 		}
-		apiServer := api.NewServer(sv.chain, opts)
+		apiServer := api.NewServer(sv.chain, sv.txChan, opts)
 		go func() {
 			panic(fmt.Sprintf("error while serving JSON: %v", apiServer.Start()))
 		}()
@@ -117,6 +117,11 @@ free:
 				continue
 			}
 			s.Logger.Log("msg", "peer added to the server", "addr", peer.Addr())
+
+		case tx := <-s.txChan:
+			if err := s.processTransaction(tx); err != nil {
+				s.Logger.Log("process tx error", err)
+			}
 
 		case rpc := <-s.rpcCh:
 			msg, err := s.RPCDecodeFunc(rpc)
@@ -155,7 +160,7 @@ func (s *Server) validatorLoop() {
 func (s *Server) ProcessMessage(msg *DecodedMessage) error {
 	switch t := msg.Data.(type) {
 	case *core.Transaction:
-		return s.processTransaction(msg.From, t)
+		return s.processTransaction(t)
 	case *core.Block:
 		return s.processBlock(t)
 	case *RequestBlocksMessage:
@@ -175,12 +180,10 @@ func (s *Server) send(to NetAddr, msg []byte) error {
 }
 
 func (s *Server) broadcast(msg []byte) error {
-	s.lock.RLock()
-	defer s.lock.RUnlock()
 	return s.Transport.Broadcast(msg)
 }
 
-func (s *Server) processTransaction(from NetAddr, tx *core.Transaction) error {
+func (s *Server) processTransaction(tx *core.Transaction) error {
 	if err := tx.Verify(); err != nil {
 		return err
 	}
@@ -221,6 +224,7 @@ func (s *Server) processBlock(b *core.Block) error {
 			s.Logger.Log("error", err.Error())
 		}
 	}()
+
 	return nil
 }
 

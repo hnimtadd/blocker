@@ -5,7 +5,6 @@ import (
 	"bytes"
 	"encoding/gob"
 	"fmt"
-	"io"
 
 	"github.com/sirupsen/logrus"
 )
@@ -35,15 +34,15 @@ func (rpc *RPC) Bytes() []byte {
 	return b.Bytes()
 }
 
-func RPCFromBytes(buf io.Reader) RPC {
+func RPCFromBytes(payload []byte) (RPC, error) {
 	rpc := &RPC{}
-	if err := gob.NewDecoder(buf).Decode(rpc); err != nil {
-		panic(fmt.Sprintf("rpc: cannot decode from bytes, err: %s", err.Error()))
+	if err := gob.NewDecoder(bytes.NewReader(payload)).Decode(rpc); err != nil {
+		return *rpc, fmt.Errorf("rpc: cannot decode from bytes, err: %s", err.Error())
 	}
 	return RPC{
 		From:    rpc.From,
 		Payload: rpc.Payload,
-	}
+	}, nil
 }
 
 type Message struct {

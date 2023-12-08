@@ -1,7 +1,7 @@
 package network
 
 import (
-	"bytes"
+	networkutils "blocker/network/utils"
 	"fmt"
 	"io"
 	"log"
@@ -58,21 +58,15 @@ func (t *TCPTransport) Send(to NetAddr, payload []byte) error {
 		return nil
 	}
 	return peer.Accept(t.Addr(), payload)
-
-	// if to == nil {
-	// 	return nil
-	// }
-	// fmt.Printf("[NODE] %s send payload to [%s]\n", t.Addr(), to.Addr())
-	// return to.Accept(t.Addr(), payload)
 }
 
 func (t *TCPTransport) Broadcast(payload []byte) error {
-	// Broadcast broadcasts to every peer of this node
 	t.lock.Lock()
 	defer t.lock.Unlock()
+	// fmt.Printf("[NODE] %s, broadcast msg to %d peer\n", t.Addr(), len(t.peers))
 	for _, peer := range t.peers {
 		if err := peer.Accept(t.Addr(), payload); err != nil {
-			fmt.Printf("tcp transport: cannot broadcast payload, err: (%s)\n", err.Error())
+			fmt.Printf("[NODE] %s cannot broadcast payload, err: (%s)\n", t.Addr(), err.Error())
 		}
 	}
 	return nil
@@ -80,8 +74,6 @@ func (t *TCPTransport) Broadcast(payload []byte) error {
 
 func (t *TCPTransport) Addr() NetAddr {
 	return NetAddr(t.nodeID)
-	// addr := NetAddr(t.listener.Addr().String())
-	// return addr
 }
 
 func (t *TCPTransport) Dial(addr NetAddr) error {
@@ -143,6 +135,7 @@ func NewTCPPeer(nodeID string, conn net.Conn, outbound bool) *TCPPeer {
 }
 
 func (p *TCPPeer) Accept(from NetAddr, payload []byte) error {
+	// fmt.Printf("[PEER] %s accept msg from %s\n", p.Addr(), from)
 	if from == p.Addr() {
 		return nil
 	}
@@ -151,14 +144,16 @@ func (p *TCPPeer) Accept(from NetAddr, payload []byte) error {
 		Payload: payload,
 	}
 	rpcBytes := rpc.Bytes()
-	n, err := io.Copy(p.conn, bytes.NewReader(rpcBytes))
-	if err != nil {
-		return err
-	}
-	if int(n) != len(rpcBytes) {
-		panic(fmt.Errorf("tcp peer: given payload with len (%d), sent (%d)", len(payload), n))
-	}
-	return nil
+	err := networkutils.Send(p.conn, rpcBytes)
+	return err
+	// n, err := io.Copy(p.conn, bytes.NewReader(rpcBytes))
+	// if err != nil {
+	// 	return err
+	// }
+	// if int(n) != len(rpcBytes) {
+	// 	panic(fmt.Errorf("tcp peer: given payload with len (%d), sent (%d)", len(payload), n))
+	// }
+	// return nil
 }
 
 func (p *TCPPeer) SetRPCCh(rpcCh chan<- RPC) {
@@ -167,21 +162,29 @@ func (p *TCPPeer) SetRPCCh(rpcCh chan<- RPC) {
 
 func (p *TCPPeer) Addr() NetAddr {
 	return NetAddr(p.nodeID)
-	// addr := NetAddr(p.conn.RemoteAddr().String())
-	// return addr
 }
 
 func (t *TCPPeer) readLoop() {
 	defer t.conn.Close()
-	fmt.Printf("[PEER] %s reading loop\n", t.Addr())
 	for {
-		buf := make([]byte, 1024)
-		n, err := t.conn.Read(buf)
+		payload, err := networkutils.Receive(t.conn)
 		if err != nil {
-			panic(fmt.Sprintf("tcp peer: read from connection failed, err: %s", err.Error()))
+			if err == io.EOF {
+				fmt.Printf("[PEER] %s, read buf, have io.EOF", t.Addr())
+				continue
+			}
+			panic(fmt.Sprintf("[PEER] %s read from connection failed, err: %s", t.Addr(), err.Error()))
+		}
+		if len(payload) == 0 {
+			panic(fmt.Sprintf("[PEER] %s, empty data from conn", t.Addr()))
 		}
 		// Buf should be bytes of RPC
-		rpc := RPCFromBytes(bytes.NewReader(buf[:n]))
+		rpc, err := RPCFromBytes(payload)
+		if err != nil {
+			fmt.Printf("[PEER] %s, error while decoding bytes, err: (%s)", t.Addr(), err.Error())
+			panic(".")
+			continue
+		}
 		go func() {
 			t.rpcCh <- rpc
 		}()
