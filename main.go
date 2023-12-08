@@ -5,6 +5,7 @@ import (
 	"blocker/crypto"
 	"blocker/network"
 	"bytes"
+	"net/http"
 	"time"
 )
 
@@ -17,6 +18,17 @@ func main() {
 		time.Sleep(time.Second * 10)
 		serverA := makeTCPServer(trRemoteA, []string{":3000"}, nil)
 		serverA.Start()
+	}()
+
+	txPostTicker := time.NewTicker(time.Millisecond * 500)
+
+	go func() {
+		for {
+			if err := sendTransaction(); err != nil {
+				panic(err)
+			}
+			<-txPostTicker.C
+		}
 	}()
 
 	privKey := crypto.GeneratePrivateKey()
@@ -53,7 +65,7 @@ func makeServer(apiAddr string, node network.Transport, seed []network.Peer, pri
 	return server
 }
 
-func sendTransaction(to network.Transport, from network.Transport) error {
+func sendLocalTransaction(to network.Transport, from network.Transport) error {
 	data := []byte{0x01, 0x0a, 0x02, 0x0a, 0x0b}
 	tx := core.NewTransaction(data)
 	privKey := crypto.GeneratePrivateKey()
@@ -65,5 +77,26 @@ func sendTransaction(to network.Transport, from network.Transport) error {
 
 	msg := network.NewMesage(network.MessageTypeTx, buf.Bytes())
 	err := to.Send(from.Addr(), msg.Bytes())
+	return err
+}
+
+func sendTransaction() error {
+	from := crypto.GeneratePrivateKey()
+	data := []byte{0x01, 0x0a, 0x02, 0x0a, 0x0b}
+	tx := core.NewTransaction(data)
+	if err := tx.Sign(from); err != nil {
+		return err
+	}
+	buf := &bytes.Buffer{}
+	if err := tx.Encode(core.NewGobTxEncoder(buf)); err != nil {
+		return err
+	}
+
+	req, err := http.NewRequest("POST", "http://localhost:8080/api/tx", buf)
+	if err != nil {
+		panic(err)
+	}
+	client := http.Client{}
+	_, err = client.Do(req)
 	return err
 }
