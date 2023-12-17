@@ -29,13 +29,10 @@ func (h *Header) Bytes() []byte {
 
 type Block struct {
 	*Header
-	Validator *crypto.PublicKey
-	Signature *crypto.Signature
-
+	Validator    *crypto.PublicKey
+	Signature    *crypto.Signature
 	Transactions []*Transaction
-
-	// Cached version of the header hash
-	hash types.Hash
+	hash         types.Hash // Cached version of the header hash
 }
 
 func NewGenesisBlock() *Block {

@@ -2,7 +2,9 @@ package core
 
 import (
 	"blocker/types"
+	"fmt"
 	"testing"
+	"time"
 
 	"github.com/go-kit/log"
 	"github.com/stretchr/testify/assert"
@@ -26,6 +28,7 @@ func TestNotSignBlock(t *testing.T) {
 	block := RandomBlock(t, uint32(1), types.RandomHash())
 	assert.NotNil(t, bc.AddBlock(block))
 }
+
 func TestBlockWithNotSignTx(t *testing.T) {
 	bc := newBlockChainWithGenesis(t)
 	assert.True(t, bc.HasBlock(0))
@@ -105,7 +108,11 @@ func TestAddBlockWithInvalidPrevHash(t *testing.T) {
 }
 
 func newBlockChainWithGenesis(t *testing.T) *BlockChain {
-	bc, err := NewBlockChain(RandomBlock(t, 0, types.RandomHash()), NewInMemoryStorage(), log.NewNopLogger())
+	fmt.Println("===>", time.Now().Unix())
+	block := RandomBlock(t, 0, types.RandomHash())
+	fmt.Println("===>", time.Now().Unix())
+	bc, err := NewBlockChain(block, NewInMemoryStorage(), log.NewNopLogger())
+	fmt.Println("===>", time.Now().Unix())
 	assert.Nil(t, err)
 	assert.NotNil(t, bc.validator)
 	assert.Equal(t, bc.Height(), uint32(0))

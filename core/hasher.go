@@ -26,3 +26,11 @@ func (TxHasher) Hash(tx *Transaction) types.Hash {
 	binary.Write(buf, binary.LittleEndian, tx.Nonce)
 	return types.Hash(sha256.Sum256(buf.Bytes()))
 }
+
+type TxMintHasher struct{}
+
+func (TxMintHasher) Hash(tx *MintTx) types.Hash {
+	buf := new(bytes.Buffer)
+	binary.Write(buf, binary.LittleEndian, tx.Bytes())
+	return types.Hash(sha256.Sum256(buf.Bytes()))
+}

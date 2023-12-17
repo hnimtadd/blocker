@@ -67,7 +67,7 @@ func makeServer(apiAddr string, node network.Transport, seed []network.Peer, pri
 
 func sendLocalTransaction(to network.Transport, from network.Transport) error {
 	data := []byte{0x01, 0x0a, 0x02, 0x0a, 0x0b}
-	tx := core.NewTransaction(data)
+	tx := core.NewNativeTransaction(data)
 	privKey := crypto.GeneratePrivateKey()
 	tx.Sign(privKey)
 	buf := &bytes.Buffer{}
@@ -83,7 +83,7 @@ func sendLocalTransaction(to network.Transport, from network.Transport) error {
 func sendTransaction() error {
 	from := crypto.GeneratePrivateKey()
 	data := []byte{0x01, 0x0a, 0x02, 0x0a, 0x0b}
-	tx := core.NewTransaction(data)
+	tx := core.NewNativeTransaction(data)
 	if err := tx.Sign(from); err != nil {
 		return err
 	}
