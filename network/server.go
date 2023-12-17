@@ -19,6 +19,7 @@ const (
 )
 
 type ServerOptions struct {
+	// RootAccount   core.Account
 	Transport     Transport
 	Logger        log.Logger
 	Addr          string // if addr not empty, mean that this node could be API server
@@ -40,6 +41,7 @@ type Server struct {
 	chain         *core.BlockChain
 	memPool       *TxPool
 	quitCh        chan struct{}
+	Storage       core.Storage // cached storage, different than chain storage
 	txChan        chan *core.Transaction
 	ServerOptions               // Embed ServerOptions
 	blockTime     time.Duration // duration of generating new blokc
@@ -61,13 +63,14 @@ func NewServer(opts ServerOptions) (*Server, error) {
 		opts.MaxPoolLen = defaultMaxPoolLen
 	}
 	chain, err := core.NewBlockChain(core.NewGenesisBlock(), core.NewInMemoryStorage(), opts.Logger)
+	// chain, err := core.NewBlockChain(Genesis(), core.NewInMemoryStorage(), opts.Logger)
 	if err != nil {
 		return nil, err
 	}
-
 	sv := &Server{
 		ServerOptions: opts,
 		blockTime:     bt,
+		Storage:       core.NewInMemoryStorage(),
 		memPool:       NewTxPool(opts.MaxPoolLen),
 		chain:         chain,
 		isValidator:   opts.PrivKey != nil,
@@ -149,7 +152,7 @@ func (s *Server) validatorLoop() {
 		select {
 		case <-ticker.C:
 			if err := s.createNewBlock(); err != nil {
-				s.Logger.Log("err", err)
+				panic(err)
 			}
 		default:
 			continue
@@ -201,8 +204,7 @@ func (s *Server) processTransaction(tx *core.Transaction) error {
 		}
 	}()
 
-	s.memPool.Add(tx)
-	return nil
+	return s.memPool.Add(tx)
 }
 
 func (s *Server) broadcastTx(tx *core.Transaction) error {
@@ -215,6 +217,7 @@ func (s *Server) broadcastTx(tx *core.Transaction) error {
 }
 
 func (s *Server) processBlock(b *core.Block) error {
+	// TODO: if the block is higher than the current blockchain, sync block, add currently txx in the orphan block to into the memPool again
 	if err := s.chain.AddBlock(b); err != nil {
 		return err
 	}
@@ -301,6 +304,7 @@ func (s *Server) processStatusMessage(from NetAddr, data *StatusMessage) error {
 }
 
 func (s *Server) createNewBlock() error {
+	// minter work
 	currentHeader, err := s.chain.GetHeader(s.chain.Height())
 	if err != nil {
 		return err
@@ -308,6 +312,10 @@ func (s *Server) createNewBlock() error {
 
 	// Should get out current pending transactions in queue
 	txx := s.memPool.Pending()
+	idxx := s.chain.SoftcheckTransactions(txx)
+	s.memPool.Denide(idxx)
+	txx = s.memPool.Pending()
+
 	block, err := core.NewBlockFromPrevHeader(currentHeader, txx)
 	if err != nil {
 		return err
@@ -325,6 +333,7 @@ func (s *Server) createNewBlock() error {
 			s.Logger.Log("error", err.Error())
 		}
 	}()
+
 	s.memPool.ClearPending()
 	return nil
 }
@@ -349,3 +358,41 @@ func (s *Server) sendGetStatusMessage(toPeer Peer) error {
 	s.Logger.Log("action", "send get status message", "to", toPeer.Addr())
 	return s.Transport.Send(toPeer.Addr(), msg.Bytes())
 }
+
+// func (s *Server) getTransactionFromTxPool(hash types.Hash) (TxPoolStatus, *core.Transaction, error) {
+// 	// getTransactionFromTxPool get transaction from membpool
+// 	return s.memPool.Get(hash)
+// }
+
+// func Genesis() *core.Block {
+// 	// coinbase := core.Account{}
+// 	coinbase := crypto.PublicKey{}
+// 	transferTx := core.TransferTx{
+// 		From: coinbase.Address(),
+// 		To:   coinbase.Address(),
+// 		In:   nil,
+// 		Out: []core.TxOut{
+// 			{
+// 				ScriptPub: crypto.ScriptPubKey(&coinbase),
+// 				Value:     1000000,
+// 			},
+// 		},
+// 	}
+//
+// 	tx := &core.Transaction{
+// 		TxInner: transferTx,
+// 		Nonce:   rand.Uint64(),
+// 	}
+// 	block := &core.Block{
+// 		Header: &core.Header{
+// 			Version:       1,
+// 			PrevBlockHash: types.Hash{},
+// 			Height:        0,
+// 			Timestamp:     00000000,
+// 		},
+// 		Transactions: []*core.Transaction{
+// 			tx,
+// 		},
+// 	}
+// 	return block
+// }

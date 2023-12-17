@@ -19,7 +19,7 @@ type Storage interface {
 
 type InMemoryStorage struct {
 	blockState      map[types.Hash]*Block
-	collectionStage map[types.Hash]*Transaction
+	collectionState map[types.Hash]*Transaction
 	nftState        map[types.Hash]*Transaction
 	lock            sync.RWMutex
 }
@@ -27,7 +27,7 @@ type InMemoryStorage struct {
 func NewInMemoryStorage() *InMemoryStorage {
 	store := &InMemoryStorage{
 		blockState:      make(map[types.Hash]*Block, 10000),
-		collectionStage: make(map[types.Hash]*Transaction),
+		collectionState: make(map[types.Hash]*Transaction),
 		nftState:        make(map[types.Hash]*Transaction),
 	}
 	return store
@@ -98,20 +98,20 @@ func (r *InMemoryStorage) HasNFT(hash types.Hash) bool {
 func (r *InMemoryStorage) PutCollection(tx *Transaction) error {
 	r.lock.Lock()
 	hash := tx.Hash(TxHasher{})
-	_, ok := r.collectionStage[hash]
+	_, ok := r.collectionState[hash]
 	r.lock.Unlock()
 	if ok {
 		return ErrExisted
 	}
 	r.lock.RLock()
-	r.collectionStage[hash] = tx
+	r.collectionState[hash] = tx
 	defer r.lock.RUnlock()
 	return nil
 }
 
 func (r *InMemoryStorage) GetCollection(hash types.Hash) (*Transaction, error) {
 	r.lock.Lock()
-	tx, ok := r.collectionStage[hash]
+	tx, ok := r.collectionState[hash]
 	r.lock.Unlock()
 	if !ok {
 		return nil, ErrNotExisted
@@ -121,7 +121,7 @@ func (r *InMemoryStorage) GetCollection(hash types.Hash) (*Transaction, error) {
 
 func (r *InMemoryStorage) HasCollection(hash types.Hash) bool {
 	r.lock.Lock()
-	_, ok := r.collectionStage[hash]
+	_, ok := r.collectionState[hash]
 	r.lock.Unlock()
 	return ok
 }

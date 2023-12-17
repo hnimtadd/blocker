@@ -12,6 +12,7 @@ import (
 var (
 	ErrTxNotfound    = errors.New("transaction not found")
 	ErrHeightTooHigh = errors.New("given height is too high")
+	ErrTxInvalid     = errors.New("given transaction is invalid")
 )
 
 type BlockChain struct {

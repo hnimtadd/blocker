@@ -182,7 +182,6 @@ func (t *TCPPeer) readLoop() {
 		rpc, err := RPCFromBytes(payload)
 		if err != nil {
 			fmt.Printf("[PEER] %s, error while decoding bytes, err: (%s)", t.Addr(), err.Error())
-			panic(".")
 			continue
 		}
 		go func() {

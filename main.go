@@ -11,18 +11,28 @@ import (
 
 func main() {
 	trLocal := network.NewTCPTransport("LOCAL", ":3000")
-	trRemoteA := network.NewTCPTransport("REMOTE_A", ":3001")
+
+	// go func() {
+	// 	// Late node
+	// 	trRemoteA := network.NewTCPTransport("REMOTE_A", ":3001")
+	// 	time.Sleep(time.Second * 10)
+	// 	serverA := makeTCPServer(trRemoteA, []string{":3000"}, nil)
+	// 	serverA.Start()
+	// }()
 
 	go func() {
-		// Late node
-		time.Sleep(time.Second * 10)
-		serverA := makeTCPServer(trRemoteA, []string{":3000"}, nil)
-		serverA.Start()
+		txPostTicker := time.NewTicker(time.Second * 3)
+		time.Sleep(time.Second * 2)
+		for {
+			if err := sendMintTransaction(); err != nil {
+				panic(err)
+			}
+			<-txPostTicker.C
+		}
 	}()
-
-	txPostTicker := time.NewTicker(time.Millisecond * 500)
-
 	go func() {
+		txPostTicker := time.NewTicker(time.Millisecond * 500)
+		time.Sleep(time.Second * 2)
 		for {
 			if err := sendTransaction(); err != nil {
 				panic(err)
@@ -32,7 +42,7 @@ func main() {
 	}()
 
 	privKey := crypto.GeneratePrivateKey()
-	server := makeServer(":8080", trLocal, []network.Peer{}, privKey)
+	server := makeServer("localhost:8080", trLocal, []network.Peer{}, privKey)
 	server.Start()
 }
 
@@ -99,4 +109,64 @@ func sendTransaction() error {
 	client := http.Client{}
 	_, err = client.Do(req)
 	return err
+}
+
+func sendMintTransaction() error {
+	from := crypto.GeneratePrivateKey()
+	mintTx := core.MintTx{
+		NFT: core.NFTAsset{
+			Type: core.NFTAssetTypeImageBase64,
+			Data: []byte("image byte"),
+		},
+		Fee: 100,
+	}
+	if err := mintTx.Sign(from); err != nil {
+		return err
+	}
+
+	tx := core.NewMintTransacton(mintTx)
+	if err := tx.Sign(from); err != nil {
+		return err
+	}
+	buf := &bytes.Buffer{}
+	if err := tx.Encode(core.NewGobTxEncoder(buf)); err != nil {
+		return err
+	}
+
+	req, err := http.NewRequest("POST", "http://localhost:8080/api/tx", buf)
+	if err != nil {
+		panic(err)
+	}
+	client := http.Client{}
+	_, err = client.Do(req)
+	return err
+}
+
+func sentTransferTransaction() error {
+	return nil
+	// from := crypto.GeneratePrivateKey()
+	// to := crypto.GeneratePrivateKey()
+	// mintTx := core.TransferTx{
+	// 	Fee: 100,
+	// }
+	// if err := mintTx.Sign(from); err != nil {
+	// 	return err
+	// }
+	//
+	// tx := core.NewMintTransacton(mintTx)
+	// if err := tx.Sign(from); err != nil {
+	// 	return err
+	// }
+	// buf := &bytes.Buffer{}
+	// if err := tx.Encode(core.NewGobTxEncoder(buf)); err != nil {
+	// 	return err
+	// }
+	//
+	// req, err := http.NewRequest("POST", "http://localhost:8080/api/tx", buf)
+	// if err != nil {
+	// 	panic(err)
+	// }
+	// client := http.Client{}
+	// _, err = client.Do(req)
+	// return err
 }
