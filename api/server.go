@@ -32,7 +32,7 @@ func (s *Server) initRoute() *echo.Echo {
 	app.GET("/api/height", s.GetHeightHandler)
 	app.GET("/api/block", s.GetBlockWithHeightHandler)
 	app.POST("/api/tx", s.SendTransactionHandler)
-
+	app.GET("/api/tx/:hash", s.GetTransactionWithHashHandler)
 	return app
 }
 
