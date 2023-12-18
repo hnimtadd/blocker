@@ -100,3 +100,66 @@ func sendTransaction() error {
 	_, err = client.Do(req)
 	return err
 }
+<<<<<<< Updated upstream
+=======
+
+func sendMintTransaction() error {
+	from := crypto.GeneratePrivateKey()
+	mintTx := core.MintTx{
+		NFT: core.NFTAsset{
+			Type: core.NFTAssetTypeImageBase64,
+			Data: []byte("image byte"),
+		},
+		Fee: 100,
+	}
+	if err := mintTx.Sign(from); err != nil {
+		return err
+	}
+
+	tx := core.NewNativeMintTransacton(mintTx)
+	if err := tx.Sign(from); err != nil {
+		return err
+	}
+	buf := &bytes.Buffer{}
+	if err := tx.Encode(core.NewGobTxEncoder(buf)); err != nil {
+		return err
+	}
+
+	req, err := http.NewRequest("POST", "http://localhost:8080/api/tx", buf)
+	if err != nil {
+		panic(err)
+	}
+	client := http.Client{}
+	_, err = client.Do(req)
+	return err
+}
+
+func sentTransferTransaction() error {
+	return nil
+	// from := crypto.GeneratePrivateKey()
+	// to := crypto.GeneratePrivateKey()
+	// mintTx := core.TransferTx{
+	// 	Fee: 100,
+	// }
+	// if err := mintTx.Sign(from); err != nil {
+	// 	return err
+	// }
+	//
+	// tx := core.NewMintTransacton(mintTx)
+	// if err := tx.Sign(from); err != nil {
+	// 	return err
+	// }
+	// buf := &bytes.Buffer{}
+	// if err := tx.Encode(core.NewGobTxEncoder(buf)); err != nil {
+	// 	return err
+	// }
+	//
+	// req, err := http.NewRequest("POST", "http://localhost:8080/api/tx", buf)
+	// if err != nil {
+	// 	panic(err)
+	// }
+	// client := http.Client{}
+	// _, err = client.Do(req)
+	// return err
+}
+>>>>>>> Stashed changes

@@ -15,12 +15,17 @@ type Storage interface {
 	PutNFT(*Transaction) error
 	GetNFT(hash types.Hash) (*Transaction, error)
 	HasNFT(hash types.Hash) bool
+	PutTransfer(*Transaction) error
+	GetTransfer(hash types.Hash) (*Transaction, error)
+	HasTransfer(hash types.Hash) bool
+	GetTransferState() (map[types.Hash]*Transaction, error)
 }
 
 type InMemoryStorage struct {
 	blockState      map[types.Hash]*Block
 	collectionStage map[types.Hash]*Transaction
 	nftState        map[types.Hash]*Transaction
+	transferState   map[types.Hash]*Transaction
 	lock            sync.RWMutex
 }
 
@@ -124,4 +129,41 @@ func (r *InMemoryStorage) HasCollection(hash types.Hash) bool {
 	_, ok := r.collectionStage[hash]
 	r.lock.Unlock()
 	return ok
+}
+
+func (r *InMemoryStorage) PutTransfer(tx *Transaction) error {
+	hash := tx.Hash(TxHasher{})
+	r.lock.Lock()
+	_, ok := r.transferState[hash]
+	r.lock.Unlock()
+	if ok {
+		return ErrExisted
+	}
+	r.lock.RLock()
+	r.transferState[hash] = tx
+	r.lock.RUnlock()
+	return nil
+}
+
+func (r *InMemoryStorage) GetTransfer(hash types.Hash) (*Transaction, error) {
+	r.lock.Lock()
+	defer r.lock.Unlock()
+	tx, ok := r.transferState[hash]
+	if !ok {
+		return nil, ErrNotExisted
+	}
+	return tx, nil
+}
+
+func (r *InMemoryStorage) HasTransfer(hash types.Hash) bool {
+	r.lock.Lock()
+	_, ok := r.transferState[hash]
+	r.lock.Unlock()
+	return ok
+}
+
+func (r *InMemoryStorage) GetTransferState() (map[types.Hash]*Transaction, error) {
+	r.lock.Lock()
+	defer r.lock.Unlock()
+	return r.transferState, nil
 }
