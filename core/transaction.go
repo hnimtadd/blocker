@@ -3,7 +3,6 @@ package core
 import (
 	"blocker/crypto"
 	"blocker/types"
-	"fmt"
 	"math/rand"
 )
 
@@ -25,6 +24,7 @@ type Transaction struct {
 	Data      []byte
 	timeStamp int64      // UNIX Nano, first time this transaction be seen locally
 	hash      types.Hash // Cached hash version of transaction
+	Fee       uint64
 	Nonce     uint64
 }
 
@@ -56,14 +56,16 @@ func (tx *Transaction) Hash(hasher Hasher[*Transaction]) types.Hash {
 
 func (tx *Transaction) Verify() error {
 	if tx.Signature == nil || tx.From == nil {
-		return fmt.Errorf("trannsaction has no signature")
+		return ErrSigNotExisted
 	}
 	if !tx.Signature.Verify(tx.From, tx.Data) {
-		return fmt.Errorf("invalid tracsaction signature")
+		return ErrSigInvalid
 	}
 	if tx.TxInner != nil {
 		switch ttx := tx.TxInner.(type) {
 		case MintTx:
+			return ttx.Verify()
+		case TransferTx:
 			return ttx.Verify()
 		default:
 			return nil

@@ -1,9 +1,14 @@
 package core
 
-import "errors"
+import (
+	"errors"
+)
 
 var (
-	ErrExisted     = errors.New("document existed")
-	ErrNotExisted  = errors.New("document not existed")
-	ErrTypeInvalid = errors.New("document type is invalid")
+	ErrDocExisted    = errors.New("document existed")
+	ErrDocNotExisted = errors.New("document not existed")
+	ErrTypeInvalid   = errors.New("document type is invalid")
+	ErrSigInvalid    = errors.New("invalid signature")
+	ErrSigNotExisted = errors.New("signature not found")
+	ErrNonceInvalid  = errors.New("nonce is invalid")
 )

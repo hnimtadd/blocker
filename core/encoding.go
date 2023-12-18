@@ -124,3 +124,31 @@ func NewGobMintTxDecoder(r io.Reader) *GobMintTxDecoder {
 func (enc *GobMintTxDecoder) Decode(tx *MintTx) error {
 	return gob.NewDecoder(enc.r).Decode(tx)
 }
+
+type GobTransferTxEncoder struct {
+	w io.Writer
+}
+
+func NewGobTransferTxEncoder(w io.Writer) *GobTransferTxEncoder {
+	return &GobTransferTxEncoder{
+		w: w,
+	}
+}
+
+func (enc *GobTransferTxEncoder) Encode(tx *TransferTx) error {
+	return gob.NewEncoder(enc.w).Encode(tx)
+}
+
+type GobTransferTxDecoder struct {
+	r io.Reader
+}
+
+func NewGobTransferTxDecoder(r io.Reader) *GobTransferTxDecoder {
+	return &GobTransferTxDecoder{
+		r: r,
+	}
+}
+
+func (enc *GobTransferTxDecoder) Decode(tx *TransferTx) error {
+	return gob.NewDecoder(enc.r).Decode(tx)
+}

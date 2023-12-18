@@ -15,10 +15,10 @@ func TestInMemoryCollection(t *testing.T) {
 	gtx, err := repo.GetCollection(hash)
 	assert.Nil(t, err)
 	assert.Equal(t, *gtx, *tx)
-	assert.Equal(t, ErrExisted, repo.PutCollection(tx))
+	assert.Equal(t, ErrDocExisted, repo.PutCollection(tx))
 
 	ntx, err := repo.GetCollection(types.RandomHash())
-	assert.Equal(t, ErrNotExisted, err)
+	assert.Equal(t, ErrDocNotExisted, err)
 	assert.Nil(t, ntx)
 
 	// txx, err := repo.GetAll()

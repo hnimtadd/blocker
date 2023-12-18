@@ -4,8 +4,10 @@ import (
 	"blocker/api"
 	"blocker/core"
 	"blocker/crypto"
+	"blocker/types"
 	"bytes"
 	"fmt"
+	"math/rand"
 	"net"
 	"os"
 	"time"
@@ -14,7 +16,7 @@ import (
 )
 
 const (
-	defaultMaxPoolLen = 10
+	defaultMaxPoolLen = 50
 	defaultBlockTime  = 5 * time.Second
 )
 
@@ -62,8 +64,7 @@ func NewServer(opts ServerOptions) (*Server, error) {
 	if opts.MaxPoolLen == 0 {
 		opts.MaxPoolLen = defaultMaxPoolLen
 	}
-	chain, err := core.NewBlockChain(core.NewGenesisBlock(), core.NewInMemoryStorage(), opts.Logger)
-	// chain, err := core.NewBlockChain(Genesis(), core.NewInMemoryStorage(), opts.Logger)
+	chain, err := core.NewBlockChain(Genesis(), core.NewInMemoryStorage(), opts.Logger)
 	if err != nil {
 		return nil, err
 	}
@@ -364,35 +365,28 @@ func (s *Server) sendGetStatusMessage(toPeer Peer) error {
 // 	return s.memPool.Get(hash)
 // }
 
-// func Genesis() *core.Block {
-// 	// coinbase := core.Account{}
-// 	coinbase := crypto.PublicKey{}
-// 	transferTx := core.TransferTx{
-// 		From: coinbase.Address(),
-// 		To:   coinbase.Address(),
-// 		In:   nil,
-// 		Out: []core.TxOut{
-// 			{
-// 				ScriptPub: crypto.ScriptPubKey(&coinbase),
-// 				Value:     1000000,
-// 			},
-// 		},
-// 	}
-//
-// 	tx := &core.Transaction{
-// 		TxInner: transferTx,
-// 		Nonce:   rand.Uint64(),
-// 	}
-// 	block := &core.Block{
-// 		Header: &core.Header{
-// 			Version:       1,
-// 			PrevBlockHash: types.Hash{},
-// 			Height:        0,
-// 			Timestamp:     00000000,
-// 		},
-// 		Transactions: []*core.Transaction{
-// 			tx,
-// 		},
-// 	}
-// 	return block
-// }
+func Genesis() *core.Block {
+	// coinbase := core.Account{}
+	transferTx := core.TransferTx{
+		From:  nil,
+		To:    nil,
+		Value: 1000000,
+	}
+
+	tx := &core.Transaction{
+		TxInner: transferTx,
+		Nonce:   rand.Uint64(),
+	}
+	block := &core.Block{
+		Header: &core.Header{
+			Version:       1,
+			PrevBlockHash: types.Hash{},
+			Height:        0,
+			Timestamp:     00000000,
+		},
+		Transactions: []*core.Transaction{
+			tx,
+		},
+	}
+	return block
+}

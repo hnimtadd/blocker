@@ -118,13 +118,12 @@ func sendMintTransaction() error {
 			Type: core.NFTAssetTypeImageBase64,
 			Data: []byte("image byte"),
 		},
-		Fee: 100,
 	}
 	if err := mintTx.Sign(from); err != nil {
 		return err
 	}
 
-	tx := core.NewMintTransacton(mintTx)
+	tx := core.NewNativeMintTransacton(mintTx)
 	if err := tx.Sign(from); err != nil {
 		return err
 	}

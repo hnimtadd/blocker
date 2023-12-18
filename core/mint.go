@@ -16,7 +16,6 @@ type MintTx struct {
 	Owner     *crypto.PublicKey
 	Signature *crypto.Signature
 	Metadata  []byte
-	Fee       int32
 	hash      types.Hash // cached hash
 }
 

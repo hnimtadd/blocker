@@ -11,7 +11,6 @@ import (
 
 func TestMintTxSign(t *testing.T) {
 	mintTx := MintTx{
-		Fee:      200,
 		Metadata: []byte("Metadata of the mintTx"),
 		NFT: NFTAsset{
 			Type: NFTAssetTypeImageBase64,
@@ -35,7 +34,6 @@ func TestMintTxSign(t *testing.T) {
 
 func TestMintTransaction(t *testing.T) {
 	mintTx := MintTx{
-		Fee:      200,
 		Metadata: []byte("Metadata of the mintTx"),
 		NFT: NFTAsset{
 			Type: NFTAssetTypeImageBase64,
@@ -54,7 +52,6 @@ func TestTransactionWithCollectionTx(t *testing.T) {
 	collectionTx := MintTx{
 		NFT:      NFTCollection{},
 		Metadata: []byte("new collection"),
-		Fee:      200,
 	}
 	priv := crypto.GeneratePrivateKey()
 	tx := Transaction{
