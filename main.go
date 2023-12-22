@@ -5,20 +5,16 @@ import (
 	"blocker/crypto"
 	"blocker/network"
 	"bytes"
+	"encoding/gob"
+	"fmt"
+	"math/rand"
 	"net/http"
+	"strconv"
 	"time"
 )
 
 func main() {
 	trLocal := network.NewTCPTransport("LOCAL", ":3000")
-
-	// go func() {
-	// 	// Late node
-	// 	trRemoteA := network.NewTCPTransport("REMOTE_A", ":3001")
-	// 	time.Sleep(time.Second * 10)
-	// 	serverA := makeTCPServer(trRemoteA, []string{":3000"}, nil)
-	// 	serverA.Start()
-	// }()
 
 	go func() {
 		txPostTicker := time.NewTicker(time.Second * 3)
@@ -28,16 +24,17 @@ func main() {
 				panic(err)
 			}
 			<-txPostTicker.C
+			fmt.Println("send mint")
 		}
 	}()
+
 	go func() {
-		txPostTicker := time.NewTicker(time.Millisecond * 500)
+		from := crypto.GeneratePrivateKey()
+		to := crypto.GeneratePrivateKey()
+		txPostTicker := time.NewTicker(time.Second * 6)
 		time.Sleep(time.Second * 2)
-		for {
-			if err := sendTransaction(); err != nil {
-				panic(err)
-			}
-			<-txPostTicker.C
+		if err := sendTransferTransaction(from, to.Public(), 10, txPostTicker); err != nil {
+			panic(err)
 		}
 	}()
 
@@ -90,33 +87,25 @@ func sendLocalTransaction(to network.Transport, from network.Transport) error {
 	return err
 }
 
-func sendTransaction() error {
+func sendDataTransaction() error {
 	from := crypto.GeneratePrivateKey()
 	data := []byte{0x01, 0x0a, 0x02, 0x0a, 0x0b}
 	tx := core.NewNativeTransaction(data)
 	if err := tx.Sign(from); err != nil {
 		return err
 	}
-	buf := &bytes.Buffer{}
-	if err := tx.Encode(core.NewGobTxEncoder(buf)); err != nil {
-		return err
-	}
-
-	req, err := http.NewRequest("POST", "http://localhost:8080/api/tx", buf)
-	if err != nil {
-		panic(err)
-	}
-	client := http.Client{}
-	_, err = client.Do(req)
-	return err
+	return sendTransaction(tx)
 }
 
 func sendMintTransaction() error {
+	rand := rand.New(rand.NewSource(time.Now().UnixNano()))
 	from := crypto.GeneratePrivateKey()
+	randInt := strconv.Itoa(rand.Int())
+	fmt.Println(randInt)
 	mintTx := core.MintTx{
 		NFT: core.NFTAsset{
 			Type: core.NFTAssetTypeImageBase64,
-			Data: []byte("image byte"),
+			Data: []byte(randInt),
 		},
 	}
 	if err := mintTx.Sign(from); err != nil {
@@ -124,9 +113,14 @@ func sendMintTransaction() error {
 	}
 
 	tx := core.NewNativeMintTransacton(mintTx)
+	tx.Nonce = 1
 	if err := tx.Sign(from); err != nil {
 		return err
 	}
+	return sendTransaction(tx)
+}
+
+func sendTransaction(tx *core.Transaction) error {
 	buf := &bytes.Buffer{}
 	if err := tx.Encode(core.NewGobTxEncoder(buf)); err != nil {
 		return err
@@ -141,31 +135,48 @@ func sendMintTransaction() error {
 	return err
 }
 
-func sentTransferTransaction() error {
-	return nil
-	// from := crypto.GeneratePrivateKey()
-	// to := crypto.GeneratePrivateKey()
-	// mintTx := core.TransferTx{
-	// 	Fee: 100,
-	// }
-	// if err := mintTx.Sign(from); err != nil {
-	// 	return err
-	// }
-	//
-	// tx := core.NewMintTransacton(mintTx)
-	// if err := tx.Sign(from); err != nil {
-	// 	return err
-	// }
-	// buf := &bytes.Buffer{}
-	// if err := tx.Encode(core.NewGobTxEncoder(buf)); err != nil {
-	// 	return err
-	// }
-	//
-	// req, err := http.NewRequest("POST", "http://localhost:8080/api/tx", buf)
-	// if err != nil {
-	// 	panic(err)
-	// }
-	// client := http.Client{}
-	// _, err = client.Do(req)
-	// return err
+func registerNewAccountState(pubKey *crypto.PublicKey) error {
+	buf := &bytes.Buffer{}
+	if err := gob.NewEncoder(buf).Encode(pubKey); err != nil {
+		return err
+	}
+
+	req, err := http.NewRequest("POST", "http://localhost:8080/api/account/register", buf)
+	if err != nil {
+		panic(err)
+	}
+	client := http.Client{}
+	_, err = client.Do(req)
+	return err
+}
+
+func sendTransferTransaction(from *crypto.PrivateKey, to *crypto.PublicKey, amount uint64, ticker *time.Ticker) error {
+	if err := registerNewAccountState(from.Public()); err != nil {
+		return err
+	}
+	nonce := 1
+
+	transferTx := core.TransferTx{
+		From:  from.Public().Address(),
+		To:    to.Address(),
+		Value: amount,
+	}
+	if err := transferTx.Sign(from); err != nil {
+		return err
+	}
+
+	for {
+		<-ticker.C
+		tx := core.NewNativeTransferTransaction(transferTx)
+		tx.Nonce = uint64(nonce)
+		if err := tx.Sign(from); err != nil {
+			panic(err)
+		}
+
+		if err := sendTransaction(tx); err != nil {
+			panic(err)
+		}
+		fmt.Println("send transfer")
+		nonce += 1
+	}
 }

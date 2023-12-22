@@ -1,10 +1,9 @@
-package network
+package server
 
 import (
-	"blocker/api"
 	"blocker/core"
 	"blocker/crypto"
-	"blocker/pool"
+	"blocker/network/api"
 	"blocker/types"
 	"bytes"
 	"fmt"
@@ -41,7 +40,7 @@ type Server struct {
 	peerCh        <-chan Peer // Read-only peer chan from transport
 	rpcCh         <-chan RPC  // Read-only rpc chan from Transport
 	chain         *core.BlockChain
-	memPool       *pool.TxPool
+	memPool       *TxPool
 	quitCh        chan struct{}
 	Storage       core.Storage // cached storage, different than chain storage
 	txChan        chan *core.Transaction
@@ -72,7 +71,7 @@ func NewServer(opts ServerOptions) (*Server, error) {
 		ServerOptions: opts,
 		blockTime:     bt,
 		Storage:       core.NewInMemoryStorage(),
-		memPool:       pool.NewTxPool(opts.MaxPoolLen),
+		memPool:       NewTxPool(opts.MaxPoolLen),
 		chain:         chain,
 		isValidator:   opts.PrivKey != nil,
 		quitCh:        make(chan struct{}, 1),
@@ -100,7 +99,7 @@ func NewServer(opts ServerOptions) (*Server, error) {
 		opts := api.ServerOpts{
 			Addr: sv.Addr,
 		}
-		apiServer := api.NewServer(sv.chain, sv.txChan, opts)
+		apiServer := api.NewServer(sv, sv.chain, sv.txChan, opts)
 		go func() {
 			panic(fmt.Sprintf("error while serving JSON: %v", apiServer.Start()))
 		}()
@@ -361,11 +360,16 @@ func (s *Server) sendGetStatusMessage(toPeer Peer) error {
 	return s.Transport.Send(toPeer.Addr(), msg.Bytes())
 }
 
+func (s *Server) GetTransactionFromTxPool(hash types.Hash) (TxPoolStatus, *core.Transaction, error) {
+	// getTransactionFromTxPool get transaction from membpool
+	return s.memPool.Get(hash)
+}
+
 func Genesis() *core.Block {
 	// coinbase := core.Account{}
 	transferTx := core.TransferTx{
-		From:  types.Address{},
-		To:    types.Address{},
+		From:  nil,
+		To:    nil,
 		Value: 1000000,
 	}
 

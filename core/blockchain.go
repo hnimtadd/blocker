@@ -1,6 +1,7 @@
 package core
 
 import (
+	"blocker/crypto"
 	"blocker/types"
 	"errors"
 	"fmt"
@@ -10,9 +11,10 @@ import (
 )
 
 var (
-	ErrTxNotfound    = errors.New("transaction not found")
-	ErrHeightTooHigh = errors.New("given height is too high")
-	ErrTxInvalid     = errors.New("given transaction is invalid")
+	ErrTxNotfound            = errors.New("transaction not found")
+	ErrHeightTooHigh         = errors.New("given height is too high")
+	ErrTxInvalid             = errors.New("given transaction is invalid")
+	ErrTxInsufficientBalance = errors.New("given account balance insufficient")
 )
 
 type BlockChain struct {
@@ -38,12 +40,26 @@ func NewBlockChain(genesis *Block, store Storage, logger log.Logger) (*BlockChai
 		confirmsLevel: 15,
 	}
 	bc.validator = NewBlockValidator(bc)
-	err := bc.addBlockWithoutValidation(genesis)
+	err := bc.handleGenesisBlock(genesis)
 	return bc, err
 }
 
 func (bc *BlockChain) SetValidator(v Validator) {
 	bc.validator = v
+}
+
+func (bc *BlockChain) handleGenesisBlock(genesis *Block) error {
+	for _, tx := range genesis.Transactions {
+		if tx.IsCoinbase() {
+			transferTx := tx.TxInner.(TransferTx)
+			err := bc.handleCoinbaseTransaction(transferTx)
+			if err != nil {
+				return nil
+			}
+			break
+		}
+	}
+	return bc.addBlockWithoutValidation(genesis)
 }
 
 func (bc *BlockChain) AddBlock(b *Block) error {
@@ -59,18 +75,16 @@ func (bc *BlockChain) AddBlock(b *Block) error {
 		}
 
 		// logic of mintTx put here
-		if tx.TxInner != nil {
-			if err := bc.handleNatveTransaction(tx); err != nil {
-				return err
-			}
+		if err := bc.handleNatveTransaction(tx); err != nil {
+			return err
 		}
 
 		// logic of
 		fee += tx.Fee
 	}
 
-	// should give fee to minter
-	if err := bc.store.UpdateAccountBalnace(b.Validator, int(fee)); err != nil {
+	// TODO: should give fee to minter
+	if err := bc.store.UpdateAccountBalance(b.Validator.Address(), int(fee)); err != nil {
 		return err
 	}
 
@@ -89,6 +103,7 @@ func (bc *BlockChain) addBlockWithoutValidation(b *Block) error {
 		"hash", fmt.Sprintf("%x", b.Hash(BlockHasher{}).Bytes()[:3]),
 		"transactions", len(b.Transactions),
 	)
+	fmt.Println(bc.store.AccountStateString())
 	return bc.store.PutBlock(b)
 }
 
@@ -143,20 +158,23 @@ func (bc *BlockChain) statusOfHeight(h uint32) Status {
 func (bc *BlockChain) handleNatveTransaction(tx *Transaction) error {
 	switch tx.TxInner.(type) {
 	case MintTx:
-		if err := bc.handleNatveNFTTransaction(tx); err != nil {
+		if err := bc.handleNativeNFTTransaction(tx); err != nil {
 			return err
 		}
 	case TransferTx:
-		if err := bc.handleNatveTransferTransaction(tx); err != nil {
+		if err := bc.handleNativeTransferTransaction(tx); err != nil {
 			return err
 		}
 	default:
-		return ErrTxInvalid
+		return nil
+	}
+	if err := bc.store.IncreaseAccountNonce(tx.From.Address()); err != nil {
+		return err
 	}
 	return nil
 }
 
-func (bc *BlockChain) handleNatveNFTTransaction(tx *Transaction) error {
+func (bc *BlockChain) handleNativeNFTTransaction(tx *Transaction) error {
 	mintTx := tx.TxInner.(MintTx)
 	switch mintTx.NFT.(type) {
 	case NFTAsset:
@@ -184,37 +202,26 @@ func (bc *BlockChain) handleCoinbaseTransaction(tx TransferTx) error {
 	return bc.store.PutCoinbase(coinbaseAccount)
 }
 
-func (bc *BlockChain) handleNatveTransferTransaction(tx *Transaction) error {
+func (bc *BlockChain) handleNativeTransferTransaction(tx *Transaction) error {
 	transferTx := tx.TxInner.(TransferTx)
-	// if tx.IsCoinbase() {
-	// 	return bc.handleCoinbaseTransaction(transferTx)
-	// }
 
 	fromState, err := bc.store.GetAccount(transferTx.From)
 	if err != nil {
 		return err
 	}
 	if fromState.Balance < (tx.Fee + transferTx.Value) {
-		return ErrTxInvalid
-	}
-	toState, err := bc.store.GetAccount(transferTx.To)
-	if err != nil {
-		if err := bc.store.PutAccount(NewAccountState(transferTx.To)); err != nil {
-			return err
-		}
-		toState, err = bc.store.GetAccount(transferTx.To)
-		if err != nil {
-			return err
-		}
+		return ErrTxInsufficientBalance
 	}
 	if err := bc.store.PutTransfer(tx); err != nil {
 		return err
 	}
 
-	if err := bc.store.UpdateAccountBalnace(fromState.PubKey, -int(transferTx.Value+tx.Fee)); err != nil {
+	fromTotal := -(int(transferTx.Value) + int(tx.Fee))
+	fmt.Println(fromTotal)
+	if err := bc.store.UpdateAccountBalance(fromState.Addr, fromTotal); err != nil {
 		return err
 	}
-	if err := bc.store.UpdateAccountBalnace(toState.PubKey, int(transferTx.Value)); err != nil {
+	if err := bc.store.UpdateAccountBalance(transferTx.To, int(transferTx.Value)); err != nil {
 		return err
 	}
 
@@ -226,6 +233,7 @@ func (bc *BlockChain) SoftcheckTransactions(txx []*Transaction) []types.Hash {
 	idxx := []types.Hash{}
 	for _, tx := range txx {
 		if err := bc.checkgeneralTransaction(tx); err != nil {
+			bc.logger.Log("soft check", err)
 			idxx = append(idxx, tx.Hash(TxHasher{}))
 			continue
 		}
@@ -233,12 +241,14 @@ func (bc *BlockChain) SoftcheckTransactions(txx []*Transaction) []types.Hash {
 		if tx.TxInner != nil {
 			switch tx.TxInner.(type) {
 			case MintTx:
-				if err := bc.checkNatveNFTTransaction(tx); err != nil {
+				if err := bc.checkNativeNFTTransaction(tx); err != nil {
+					bc.logger.Log("soft check mint", err)
 					idxx = append(idxx, tx.Hash(TxHasher{}))
 					continue
 				}
 			case TransferTx:
 				if err := bc.checkNativeTransferTransaction(tx); err != nil {
+					bc.logger.Log("soft check transfer", err)
 					idxx = append(idxx, tx.Hash(TxHasher{}))
 					continue
 				}
@@ -249,7 +259,7 @@ func (bc *BlockChain) SoftcheckTransactions(txx []*Transaction) []types.Hash {
 }
 
 func (bc *BlockChain) checkgeneralTransaction(tx *Transaction) error {
-	fromState, err := bc.store.GetAccount(tx.From)
+	fromState, err := bc.store.GetAccount(tx.From.Address())
 	if err != nil {
 		bc.logger.Log("tx", err)
 		return err
@@ -260,13 +270,17 @@ func (bc *BlockChain) checkgeneralTransaction(tx *Transaction) error {
 	return nil
 }
 
-func (bc *BlockChain) checkNatveNFTTransaction(tx *Transaction) error {
+func (bc *BlockChain) checkNativeNFTTransaction(tx *Transaction) error {
 	mintTx := tx.TxInner.(MintTx)
 	hash := tx.Hash(TxHasher{})
 	switch mintTx.NFT.(type) {
 	case NFTAsset:
 		// logic for mint tx processing should put here
 		if ok := bc.store.HasNFT(hash); ok {
+			fmt.Println(tx)
+			mint, _ := bc.store.GetNFT(hash)
+			fmt.Println(mint)
+			panic(".")
 			return ErrDocExisted
 		}
 
@@ -289,4 +303,10 @@ func (bc *BlockChain) checkNativeTransferTransaction(tx *Transaction) error {
 		return err
 	}
 	return nil
+}
+
+func (bc *BlockChain) PutNewAccount(pubKey *crypto.PublicKey) error {
+	state := NewAccountState(pubKey)
+	state.Balance = 1000000 // just for testing
+	return bc.store.PutAccount(state)
 }

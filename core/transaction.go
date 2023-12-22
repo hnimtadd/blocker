@@ -3,6 +3,7 @@ package core
 import (
 	"blocker/crypto"
 	"blocker/types"
+	"fmt"
 	"math/rand"
 )
 
@@ -28,6 +29,11 @@ type Transaction struct {
 	Nonce     uint64
 }
 
+func (t Transaction) String() string {
+	return fmt.Sprintf("%s=>[from=%s, Nonce=%v, fee=%v, timestamp=%v]\n", t.Hash(TxHasher{}).Short(), t.From.Address().String(), t.Nonce, t.Fee, t.timeStamp)
+}
+
+// NewNativeTransaction is deprecated, transaction should be created from account
 func NewNativeTransaction(data []byte) *Transaction {
 	return &Transaction{
 		Data:  data,

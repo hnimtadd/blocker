@@ -2,6 +2,8 @@ package api
 
 import (
 	"blocker/core"
+	"blocker/crypto"
+	"blocker/pool"
 	"blocker/types"
 	"crypto/sha256"
 	"encoding/gob"
@@ -87,7 +89,8 @@ type TransactionJSON struct {
 	Type    string         `json:"tx_type"`
 }
 
-func TransactionJSONWithStatus(st core.Status, tx *core.Transaction, b *core.Block) (*TransactionJSON, error) {
+// TransactionData returns transaction type and relevant data of that transaction type
+func TransactionData(tx *core.Transaction) (string, map[string]any) {
 	var txType string
 	var data map[string]any
 	switch ttx := tx.TxInner.(type) {
@@ -116,6 +119,22 @@ func TransactionJSONWithStatus(st core.Status, tx *core.Transaction, b *core.Blo
 		}
 		txType = string(core.TxTypeNative)
 	}
+	return txType, data
+}
+
+func TransactionJSONFromPoolWithStatus(st pool.TxPoolStatus, tx *core.Transaction) (*TransactionJSON, error) {
+	txType, data := TransactionData(tx)
+	return &TransactionJSON{
+		Status:  string(st),
+		Hash:    tx.Hash(core.TxHasher{}).String(),
+		BlockID: "",
+		Type:    txType,
+		Data:    data,
+	}, nil
+}
+
+func TransactionJSONWithStatus(st core.Status, tx *core.Transaction, b *core.Block) (*TransactionJSON, error) {
+	txType, data := TransactionData(tx)
 	return &TransactionJSON{
 		Status:  string(st),
 		Hash:    tx.Hash(core.TxHasher{}).String(),
@@ -130,24 +149,66 @@ func (s *Server) GetTransactionWithHashHandler(c echo.Context) error {
 	if hashString == "" {
 		return c.JSON(http.StatusBadRequest, echo.Map{"errors": "invalid hash"})
 	}
+	// check from txPool if tx is denided
+
 	hashBytes, err := hex.DecodeString(hashString)
 	if err != nil {
 		return c.JSON(http.StatusBadRequest, echo.Map{"errors": fmt.Sprintf("cannot decode hash given hahs, (%s)", err.Error())})
 	}
-
-	status, b, tx, err := s.chain.GetTransaction(types.HashFromBytes(hashBytes))
+	poolStatus, tx, err := s.TxPool.Get(types.HashFromBytes(hashBytes))
 	if err != nil {
-		return c.String(http.StatusNotFound, fmt.Sprintf("cannot get transaction information: (%s)", err.Error()))
+		return c.String(http.StatusNotFound, fmt.Sprintf("cannot get transaction informatin: %s", err.Error()))
 	}
+	switch poolStatus {
+	case pool.TxPoolReceived:
+		status, b, tx, err := s.chain.GetTransaction(types.HashFromBytes(hashBytes))
+		if err != nil {
+			return c.String(http.StatusNotFound, fmt.Sprintf("cannot get transaction information: (%s)", err.Error()))
+		}
 
-	jsonTx, err := TransactionJSONWithStatus(status, tx, b)
-	if err != nil {
-		return c.String(http.StatusNotFound, fmt.Sprintf("cannot get transaction information: (%s)", err.Error()))
+		jsonTx, err := TransactionJSONWithStatus(status, tx, b)
+		if err != nil {
+			return c.String(http.StatusInternalServerError, fmt.Sprintf("cannot get transaction information: (%s)", err.Error()))
+		}
+		return c.JSON(http.StatusOK, jsonTx)
+	default:
+		jsonTx, err := TransactionJSONFromPoolWithStatus(poolStatus, tx)
+		if err != nil {
+			return c.String(http.StatusInternalServerError, fmt.Sprintf("cannot get transaction information: %s", err.Error()))
+		}
+		return c.JSON(http.StatusOK, jsonTx)
 	}
-
-	return c.JSON(http.StatusOK, jsonTx)
 }
 
 func (s *Server) CheckTransactionStatus(c echo.Context) error {
+	hashString := c.Param("hash")
+	if hashString == "" {
+		return c.JSON(http.StatusBadRequest, echo.Map{"errors": "invalid hash"})
+	}
+
+	hashBytes, err := hex.DecodeString(hashString)
+	if err != nil {
+		return c.JSON(http.StatusBadRequest, echo.Map{"errors": fmt.Sprintf("cannot decode hash given hahs, (%s)", err.Error())})
+	}
+	poolStatus, tx, err := s.TxPool.Get(types.HashFromBytes(hashBytes))
+	if err != nil {
+		return c.String(http.StatusNotFound, fmt.Sprintf("cannot get transaction informatin: %s", err.Error()))
+	}
+
+	jsonTx, err := TransactionJSONFromPoolWithStatus(poolStatus, tx)
+	if err != nil {
+		return c.String(http.StatusInternalServerError, fmt.Sprintf("cannot get transaction information: %s", err.Error()))
+	}
+	return c.JSON(http.StatusOK, jsonTx)
+}
+
+func (s *Server) RegisterNewAccountStateHandler(c echo.Context) error {
+	pubKey := new(crypto.PublicKey)
+	if err := gob.NewDecoder(c.Request().Body).Decode(pubKey); err != nil {
+		return c.JSON(http.StatusBadRequest, echo.Map{"error": err.Error()})
+	}
+	if err := s.chain.PutNewAccount(pubKey); err != nil {
+		return c.JSON(http.StatusBadRequest, echo.Map{"error": err.Error()})
+	}
 	return nil
 }

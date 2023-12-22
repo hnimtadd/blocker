@@ -2,15 +2,18 @@ package core
 
 import (
 	"blocker/crypto"
+	"blocker/types"
 	"bytes"
 	"encoding/binary"
+	"encoding/gob"
 	"math/rand"
 )
 
 type TransferTx struct {
 	Signature *crypto.Signature
-	From      *crypto.PublicKey
-	To        *crypto.PublicKey
+	Signer    *crypto.PublicKey
+	From      types.Address
+	To        types.Address
 	Value     uint64
 }
 
@@ -35,15 +38,15 @@ func (tx *TransferTx) Bytes() []byte {
 func (tx *TransferTx) Sign(priv *crypto.PrivateKey) error {
 	sig := priv.Sign(tx.Bytes())
 	tx.Signature = sig
-	tx.From = priv.Public()
+	tx.Signer = priv.Public()
 	return nil
 }
 
 func (tx *TransferTx) Verify() error {
-	if tx.Signature == nil || tx.From == nil {
+	if tx.Signature == nil || tx.Signer == nil {
 		return ErrSigNotExisted
 	}
-	if !tx.Signature.Verify(tx.From, tx.Bytes()) {
+	if !tx.Signature.Verify(tx.Signer, tx.Bytes()) {
 		return ErrSigInvalid
 	}
 	return nil
@@ -62,10 +65,15 @@ func (tx *Transaction) IsCoinbase() bool {
 	if !ok {
 		return false
 	}
-	return transferTx.From == nil &&
-		transferTx.To == nil &&
+	return transferTx.Signer == nil &&
+		transferTx.From == types.Address{} &&
+		transferTx.To == types.Address{} &&
 		transferTx.Signature == nil &&
 		tx.From == nil &&
 		tx.Signature == nil &&
 		tx.Nonce == 0
+}
+
+func init() {
+	gob.Register(TransferTx{})
 }

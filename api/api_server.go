@@ -2,12 +2,14 @@ package api
 
 import (
 	"blocker/core"
+	"blocker/pool"
 
 	"github.com/labstack/echo/v4"
 )
 
 type ServerOpts struct {
-	Addr string
+	TxPool *pool.TxPool
+	Addr   string
 }
 
 type Server struct {
@@ -33,6 +35,7 @@ func (s *Server) initRoute() *echo.Echo {
 	app.GET("/api/block", s.GetBlockWithHeightHandler)
 	app.POST("/api/tx", s.SendTransactionHandler)
 	app.GET("/api/tx/:hash", s.GetTransactionWithHashHandler)
+	app.POST("/api/account/register", s.RegisterNewAccountStateHandler)
 	return app
 }
 

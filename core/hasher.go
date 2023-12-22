@@ -20,10 +20,14 @@ func (BlockHasher) Hash(h *Header) types.Hash {
 
 type TxHasher struct{}
 
+// TODO: should hash of transaction include from and signature?
 func (TxHasher) Hash(tx *Transaction) types.Hash {
 	buf := new(bytes.Buffer)
 	binary.Write(buf, binary.LittleEndian, tx.Data)
+	binary.Write(buf, binary.LittleEndian, tx.TxInner)
 	binary.Write(buf, binary.LittleEndian, tx.Nonce)
+	binary.Write(buf, binary.LittleEndian, tx.From.Bytes())
+	binary.Write(buf, binary.LittleEndian, tx.Signature.Bytes())
 	return types.Hash(sha256.Sum256(buf.Bytes()))
 }
 

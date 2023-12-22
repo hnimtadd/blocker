@@ -121,6 +121,17 @@ func (b *Block) Hash(hasher Hasher[*Header]) types.Hash {
 	return b.hash
 }
 
+// ReHash must be call after modified the block
+func (b *Block) ReHash(hasher Hasher[*Header]) error {
+	b.hash = hasher.Hash(b.Header)
+	dataHash, err := CalculateDataHash(b.Transactions)
+	if err != nil {
+		return err
+	}
+	b.DataHash = dataHash
+	return nil
+}
+
 func CalculateDataHash(txx []*Transaction) (types.Hash, error) {
 	buf := &bytes.Buffer{}
 	for _, tx := range txx {
