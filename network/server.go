@@ -153,7 +153,8 @@ func (s *Server) validatorLoop() {
 		select {
 		case <-ticker.C:
 			if err := s.createNewBlock(); err != nil {
-				panic(err)
+				s.Logger.Log("error", err)
+				// panic(err)
 			}
 		default:
 			continue
@@ -312,11 +313,39 @@ func (s *Server) createNewBlock() error {
 	}
 
 	// Should get out current pending transactions in queue
+	// pending and remove pending maybe remove unprocessed transaction
 	txx := s.memPool.Pending()
+	s.memPool.LockPending()
+	fmt.Println("==========PENDING-TRANSACTION=============")
+	for _, tx := range txx {
+		s.Logger.Log("pending", tx.String())
+	}
+	fmt.Println("==========END-PENDING-TRANSACTION=============")
 	idxx := s.chain.SoftcheckTransactions(txx)
-	fmt.Println("denided", idxx)
-	s.memPool.Denide(idxx)
-	txx = s.memPool.Pending()
+	if len(idxx) > 0 {
+		denidedTXX := s.memPool.Denide(idxx)
+
+		s.memPool.UnlockPending()
+		txx = s.memPool.Pending()
+		s.memPool.LockPending()
+
+		fmt.Println("==========DENIDED-TRANSACTION=============")
+		for _, tx := range denidedTXX {
+			s.Logger.Log("denided", tx.String())
+		}
+
+		fmt.Println("==========END-DENIDED-TRANSACTION=============")
+
+		fmt.Println("==========PROCESSED-TRANSACTION=============")
+		for _, tx := range txx {
+			s.Logger.Log("processed", tx.String())
+		}
+		fmt.Println("==========END-PROCESSED-TRANSACTION=============")
+
+		fmt.Println("==========ACCOUNT-STATE==========")
+		fmt.Println(s.chain.AccountState())
+		fmt.Println("==========END-ACCOUNT-STATE==========")
+	}
 
 	block, err := core.NewBlockFromPrevHeader(currentHeader, txx)
 	if err != nil {
