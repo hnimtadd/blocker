@@ -228,7 +228,7 @@ func (s *Server) RegisterNewAccountStateHandler(c echo.Context) error {
 	return nil
 }
 
-func (s *Server) GetAccountStateHandler(c echo.Context) error {
+func (s *Server) GetAccountStateSummaryHandler(c echo.Context) error {
 	addrString := c.Param("hash")
 
 	if addrString == "" {
@@ -240,12 +240,15 @@ func (s *Server) GetAccountStateHandler(c echo.Context) error {
 		return c.JSON(http.StatusBadRequest, echo.Map{"errors": fmt.Sprintf("cannot decode hash given hahs, (%s)", err.Error())})
 	}
 	addr := types.AddressFromBytes(addrBytes)
-
-	state, fromTxx, toTxx, err := s.chain.GetAccount(addr)
+	state, err := s.chain.GetAccountState(addr)
 	if err != nil {
 		return c.String(http.StatusNotFound, fmt.Sprintf("cannot get account state from blockchain: %s", err.Error()))
 	}
 
+	fromTxx, toTxx, err := s.chain.GetAccountTransferTransactions(addr)
+	if err != nil {
+		return c.String(http.StatusNotFound, fmt.Sprintf("cannot get txx of this user: %s", err.Error()))
+	}
 	fromTXXString := []string{}
 	for _, tx := range fromTxx {
 		fromTXXString = append(fromTXXString, tx.Hash(core.TxHasher{}).String())
@@ -266,5 +269,29 @@ func (s *Server) GetAccountStateHandler(c echo.Context) error {
 			},
 			"outcomeTransactions": fromTXXString,
 			"incomeTransactions":  toTxxString,
+		})
+}
+
+func (s *Server) GetAccountStateHandler(c echo.Context) error {
+	addrString := c.Param("hash")
+
+	if addrString == "" {
+		return c.JSON(http.StatusBadRequest, echo.Map{"errors": "invalid hash"})
+	}
+	// check from txPool if tx is denided
+	addrBytes, err := hex.DecodeString(addrString)
+	if err != nil {
+		return c.JSON(http.StatusBadRequest, echo.Map{"errors": fmt.Sprintf("cannot decode hash given hahs, (%s)", err.Error())})
+	}
+	addr := types.AddressFromBytes(addrBytes)
+	state, err := s.chain.GetAccountState(addr)
+	if err != nil {
+		return c.String(http.StatusNotFound, fmt.Sprintf("cannot get account state from blockchain: %s", err.Error()))
+	}
+	return c.JSON(
+		http.StatusOK, echo.Map{
+			"addr":    state.Addr.String(),
+			"balance": state.Balance,
+			"nonce":   state.Nonce,
 		})
 }
