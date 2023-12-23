@@ -4,9 +4,10 @@ import (
 	"blocker/core"
 	"blocker/crypto"
 	"blocker/network"
+	"blocker/wallet"
 	"bytes"
-	"encoding/gob"
-	"fmt"
+	"errors"
+	"io"
 	"math/rand"
 	"net/http"
 	"strconv"
@@ -24,7 +25,7 @@ func main() {
 				panic(err)
 			}
 			<-txPostTicker.C
-			fmt.Println("send mint")
+			// fmt.Println("send mint")
 		}
 	}()
 
@@ -101,7 +102,7 @@ func sendMintTransaction() error {
 	rand := rand.New(rand.NewSource(time.Now().UnixNano()))
 	from := crypto.GeneratePrivateKey()
 	randInt := strconv.Itoa(rand.Int())
-	fmt.Println(randInt)
+	// fmt.Println(randInt)
 	mintTx := core.MintTx{
 		NFT: core.NFTAsset{
 			Type: core.NFTAssetTypeImageBase64,
@@ -131,52 +132,26 @@ func sendTransaction(tx *core.Transaction) error {
 		panic(err)
 	}
 	client := http.Client{}
-	_, err = client.Do(req)
-	return err
-}
-
-func registerNewAccountState(pubKey *crypto.PublicKey) error {
-	buf := &bytes.Buffer{}
-	if err := gob.NewEncoder(buf).Encode(pubKey); err != nil {
+	res, err := client.Do(req)
+	if err != nil {
 		return err
 	}
-
-	req, err := http.NewRequest("POST", "http://localhost:8080/api/account/register", buf)
-	if err != nil {
-		panic(err)
+	if res.StatusCode == http.StatusOK {
+		return nil
 	}
-	client := http.Client{}
-	_, err = client.Do(req)
-	return err
+	buf.Reset()
+	if _, err := io.Copy(buf, res.Body); err != nil {
+		return err
+	}
+	return errors.New(buf.String())
 }
 
 func sendTransferTransaction(from *crypto.PrivateKey, to *crypto.PublicKey, amount uint64, ticker *time.Ticker) error {
-	if err := registerNewAccountState(from.Public()); err != nil {
-		return err
-	}
-	nonce := 1
-
-	transferTx := core.TransferTx{
-		From:  from.Public().Address(),
-		To:    to.Address(),
-		Value: amount,
-	}
-	if err := transferTx.Sign(from); err != nil {
-		return err
-	}
-
+	w := wallet.NewWallet(from)
 	for {
 		<-ticker.C
-		tx := core.NewNativeTransferTransaction(transferTx)
-		tx.Nonce = uint64(nonce)
-		if err := tx.Sign(from); err != nil {
-			panic(err)
+		if err := w.TransferTransaction(to.Address(), amount, 50); err != nil {
+			return err
 		}
-
-		if err := sendTransaction(tx); err != nil {
-			panic(err)
-		}
-		fmt.Println("send transfer")
-		nonce += 1
 	}
 }
