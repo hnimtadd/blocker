@@ -3,6 +3,8 @@ package core
 import (
 	"blocker/crypto"
 	"blocker/types"
+	"bytes"
+	"encoding/binary"
 	"fmt"
 	"math/rand"
 )
@@ -30,7 +32,11 @@ type Transaction struct {
 }
 
 func (t Transaction) String() string {
-	return fmt.Sprintf("%s=>[from=%s, Nonce=%v, fee=%v, timestamp=%v]\n", t.Hash(TxHasher{}).Short(), t.From.Address().String(), t.Nonce, t.Fee, t.timeStamp)
+	from := "unknown"
+	if t.From != nil {
+		from = t.From.Address().String()
+	}
+	return fmt.Sprintf("%s=>[from=%s, Nonce=%v, fee=%v, timestamp=%v]\n", t.Hash(TxHasher{}).Short(), from, t.Nonce, t.Fee, t.timeStamp)
 }
 
 // NewNativeTransaction is deprecated, transaction should be created from account
@@ -46,8 +52,38 @@ func (tx *Transaction) IsTransferTx() bool {
 	return ok
 }
 
+// Bytes return data bytes in the transaction
+func (tx *Transaction) Bytes() []byte {
+	buf := new(bytes.Buffer)
+
+	if tx.Data != nil {
+		if err := binary.Write(buf, binary.LittleEndian, tx.Data); err != nil {
+			panic(err)
+		}
+	}
+
+	if tx.TxInner != nil {
+		switch txInner := tx.TxInner.(type) {
+		case TransferTx:
+			if err := binary.Write(buf, binary.LittleEndian, txInner.Bytes()); err != nil {
+				panic(err)
+			}
+		case MintTx:
+			if err := binary.Write(buf, binary.LittleEndian, txInner.Bytes()); err != nil {
+				panic(err)
+			}
+		}
+	}
+
+	if err := binary.Write(buf, binary.LittleEndian, tx.Nonce); err != nil {
+		panic(err)
+	}
+
+	return buf.Bytes()
+}
+
 func (tx *Transaction) Sign(privKey *crypto.PrivateKey) error {
-	sig := privKey.Sign(tx.Data)
+	sig := privKey.Sign(tx.Bytes())
 	tx.From = privKey.Public()
 	tx.Signature = sig
 	return nil
@@ -64,7 +100,7 @@ func (tx *Transaction) Verify() error {
 	if tx.Signature == nil || tx.From == nil {
 		return ErrSigNotExisted
 	}
-	if !tx.Signature.Verify(tx.From, tx.Data) {
+	if !tx.Signature.Verify(tx.From, tx.Bytes()) {
 		return ErrSigInvalid
 	}
 	if tx.TxInner != nil {
@@ -94,4 +130,22 @@ func (tx *Transaction) SetTimestamp(t int64) {
 
 func (tx *Transaction) Timestamp() int64 {
 	return tx.timeStamp
+}
+
+func (tx *Transaction) ReHash(hasher Hasher[*Transaction]) types.Hash {
+	tx.hash = types.Hash{}
+	return tx.Hash(hasher)
+}
+
+func (tx *Transaction) Copy() *Transaction {
+	newTx := &Transaction{
+		From:      tx.From,
+		Signature: tx.Signature,
+		Nonce:     tx.Nonce,
+		TxInner:   tx.TxInner,
+		timeStamp: tx.timeStamp,
+		Data:      tx.Data[:],
+		Fee:       tx.Fee,
+	}
+	return newTx
 }

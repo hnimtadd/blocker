@@ -30,7 +30,8 @@ func TestSendInsuffienceTransfer(t *testing.T) {
 
 	amount := uint64(100)
 	transferTx := TransferTx{
-		To:    priveAlice.Public(),
+		From:  privBob.Public().Address(),
+		To:    priveAlice.Public().Address(),
 		Value: amount,
 	}
 	assert.Nil(t, transferTx.Sign(privBob))
@@ -69,7 +70,8 @@ func TestSendSuccessTransfer(t *testing.T) {
 
 	amount := uint64(100)
 	transferTx := TransferTx{
-		To:    priveAlice.Public(),
+		From:  privBob.Public().Address(),
+		To:    priveAlice.Public().Address(),
 		Value: amount,
 	}
 	assert.Nil(t, transferTx.Sign(privBob))
@@ -185,8 +187,8 @@ func TestAddBlockWithInvalidPrevHash(t *testing.T) {
 func newGenesisBlock() *Block {
 	// coinbase := core.Account{}
 	transferTx := TransferTx{
-		From:  nil,
-		To:    nil,
+		From:  types.Address{},
+		To:    types.Address{},
 		Value: 1000000,
 	}
 	tx := NewNativeTransferTransaction(transferTx)

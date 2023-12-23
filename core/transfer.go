@@ -29,6 +29,9 @@ func (tx *TransferTx) Bytes() []byte {
 	if err := binary.Write(buf, binary.LittleEndian, tx.Value); err != nil {
 		panic(err)
 	}
+	if err := binary.Write(buf, binary.NativeEndian, tx.From.Bytes()); err != nil {
+		panic(err)
+	}
 	if err := binary.Write(buf, binary.NativeEndian, tx.To.Bytes()); err != nil {
 		panic(err)
 	}

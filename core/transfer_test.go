@@ -8,11 +8,12 @@ import (
 	"github.com/stretchr/testify/assert"
 )
 
-func testTransferTx(t *testing.T) {
+func TestTransferTx(t *testing.T) {
 	from := crypto.GeneratePrivateKey()
 	to := crypto.GeneratePrivateKey()
 	transfer := TransferTx{
-		To:    to.Public(),
+		From:  from.Public().Address(),
+		To:    to.Public().Address(),
 		Value: 100,
 	}
 
@@ -22,7 +23,7 @@ func testTransferTx(t *testing.T) {
 
 	invalidFrom := crypto.GeneratePrivateKey()
 
-	transfer.From = invalidFrom.Public()
+	transfer.From = invalidFrom.Public().Address()
 	assert.NotNil(t, transfer.Verify())
 
 	assert.Nil(t, transfer.Verify())

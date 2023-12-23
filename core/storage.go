@@ -26,6 +26,8 @@ type Storage interface {
 	IncreaseAccountNonce(types.Address) error
 	AccountStateString() string
 
+	GetTransferOfAccount(addr types.Address) (fromTxx []*Transaction, toTxx []*Transaction, err error)
+
 	PutTransfer(*Transaction) error
 	GetTransfer(hash types.Hash) (*Transaction, error)
 
@@ -220,8 +222,26 @@ func (r *InMemoryStorage) AccountStateString() string {
 	for addr, state := range acc {
 		fmt.Fprintf(str, "%s=>%s\n", addr.String(), state)
 	}
-	str.WriteString("=====================ACCOUNT-STATE=====================")
+	str.WriteString("=====================END-ACCOUNT-STATE=====================")
 	return str.String()
+}
+
+func (r *InMemoryStorage) GetTransferOfAccount(addr types.Address) ([]*Transaction, []*Transaction, error) {
+	fromTxx := []*Transaction{}
+	toTxx := []*Transaction{}
+	for _, tx := range r.transferState {
+		transfer, ok := tx.TxInner.(TransferTx)
+		if !ok {
+			continue
+		}
+		if transfer.From == addr {
+			fromTxx = append(fromTxx, tx)
+		}
+		if transfer.To == addr {
+			toTxx = append(toTxx, tx)
+		}
+	}
+	return fromTxx, toTxx, nil
 }
 
 func (r *InMemoryStorage) GetCoinbaseState() *AccountState {
