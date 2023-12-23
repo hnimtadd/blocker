@@ -6,18 +6,21 @@ import (
 	"errors"
 	"fmt"
 	"sync"
+	"time"
 )
 
 type TxPool struct {
 	pending   *TxSortedMap
 	processed *TxSortedMap
 	denided   *TxSortedMap
+	expired   *TxSortedMap
 	maxLength int // The maxLength of the total pool of transactions. When the pool is full the oldest transaction will be pruned.
 }
 type TxPoolStatus string
 
 const (
 	TxPooldDenied  TxPoolStatus = "denied"
+	TxPoolExpired  TxPoolStatus = "expired"
 	TxPooldPending TxPoolStatus = "pending"
 	TxPoolReceived TxPoolStatus = "received"
 	TxPoolUnknown  TxPoolStatus = "unknown"
@@ -32,6 +35,8 @@ func NewTxPool(maxLength int) *TxPool {
 	return &TxPool{
 		processed: NewTxSortedMap(),
 		pending:   NewTxSortedMap(),
+		denided:   NewTxSortedMap(),
+		expired:   NewTxSortedMap(),
 		maxLength: maxLength,
 	}
 }
@@ -43,9 +48,6 @@ func (p *TxPool) Add(tx *core.Transaction) error {
 	}
 	if !p.pending.Contains(tx.ReHash(core.TxHasher{})) {
 		p.pending.Add(tx)
-		if tx.Nonce > 1 {
-			fmt.Println("new tx to pool", tx)
-		}
 		return nil
 	}
 	return ErrNotknown
@@ -81,8 +83,6 @@ func (p *TxPool) Get(hash types.Hash) (TxPoolStatus, *core.Transaction, error) {
 	return TxPoolUnknown, tx, nil
 }
 
-// GentPendingAndLock returns a slice of transactions that are in the pending pool, and then lock the pending
-
 func (p *TxPool) LockPending() {
 	p.pending.Lock()
 }
@@ -93,13 +93,48 @@ func (p *TxPool) UnlockPending() {
 
 // Pending returns a slice of transactions that are in the pending pool, and then lock the pending
 func (p *TxPool) Pending() []*core.Transaction {
-	return p.pending.txx.Data
+	txx := p.pending.txx.Data
+	p.LockPending()
+	now := time.Now().UnixNano()
+	expiredTx := []types.Hash{}
+	pendingTxx := []*core.Transaction{}
+	for _, tx := range txx {
+		if tx.ValidUntil < now && tx.ValidUntil != 0 {
+			expiredTx = append(expiredTx, tx.Hash(core.TxHasher{}))
+			continue
+		}
+		if tx.ValidFrom == 0 {
+			pendingTxx = append(pendingTxx, tx)
+			continue
+		}
+		fmt.Println(tx)
+		if tx.ValidFrom < now {
+			pendingTxx = append(pendingTxx, tx)
+			continue
+		}
+	}
+	if len(expiredTx) > 0 {
+		p.Expire(expiredTx)
+		return pendingTxx
+	}
+	p.UnlockPending()
+	return pendingTxx
+}
+
+func (p *TxPool) Expire(idxx []types.Hash) {
+	p.UnlockPending()
+	for _, hash := range idxx {
+		tx := p.pending.Remove(hash)
+		p.expired.Add(tx)
+		// fmt.Println(tx, "expired")
+	}
+	p.LockPending()
 }
 
 func (p *TxPool) ClearPending() {
 	p.pending.Unlock()
 	p.pending.Clear()
-	fmt.Println("clear")
+	// fmt.Println("clear")
 }
 
 func (p *TxPool) PendingCount() int {
@@ -111,18 +146,19 @@ func (p *TxPool) Denide(idxx []types.Hash) []*core.Transaction {
 	p.pending.Unlock()
 	denidedTXX := []*core.Transaction{}
 	for _, idx := range idxx {
-		denidedTXX = append(denidedTXX, p.pending.Remove(idx))
+		tx := p.pending.Remove(idx)
+		denidedTXX = append(denidedTXX, tx)
+		p.denided.Add(tx)
 	}
 	p.pending.Lock()
 	return denidedTXX
 }
 
-func (p *TxPool) Processed(idxx []types.Hash) {
-	for _, idx := range idxx {
-		tx := p.pending.Get(idx)
-		if tx != nil {
-			p.processed.Add(tx)
-		}
+func (p *TxPool) Processed(txx []*core.Transaction) {
+	p.pending.Unlock()
+	for _, tx := range txx {
+		p.processed.Add(tx)
+		p.pending.Remove(tx.Hash(core.TxHasher{}))
 	}
 }
 
@@ -199,10 +235,8 @@ func (t *TxSortedMap) Clear() {
 
 func (t *TxSortedMap) Lock() {
 	t.lock.Lock()
-	fmt.Println("lock pool")
 }
 
 func (t *TxSortedMap) Unlock() {
 	t.lock.Unlock()
-	fmt.Println("unlock pool")
 }

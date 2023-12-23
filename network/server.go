@@ -365,15 +365,9 @@ func (s *Server) createNewBlock() error {
 		}
 	}()
 
-	s.memPool.ClearPending()
+	s.memPool.Processed(txx)
 	return nil
 }
-
-// func (s *Server) bootstrapNetwork() {
-// 	for _, peer := range s.LocalSeed {
-// 		s.peerCh <- peer
-// 	}
-// }
 
 func (s *Server) bootstrapTCPNetwork() {
 	for _, addr := range s.TCPSeed {
