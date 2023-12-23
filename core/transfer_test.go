@@ -20,13 +20,11 @@ func TestTransferTx(t *testing.T) {
 	assert.Nil(t, transfer.Sign(from))
 	assert.NotNil(t, transfer.From)
 	assert.NotNil(t, transfer.Signature)
+	assert.Nil(t, transfer.Verify())
 
 	invalidFrom := crypto.GeneratePrivateKey()
-
 	transfer.From = invalidFrom.Public().Address()
 	assert.NotNil(t, transfer.Verify())
-
-	assert.Nil(t, transfer.Verify())
 
 	buf := new(bytes.Buffer)
 

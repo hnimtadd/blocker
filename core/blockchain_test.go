@@ -37,6 +37,7 @@ func TestSendInsuffienceTransfer(t *testing.T) {
 	assert.Nil(t, transferTx.Sign(privBob))
 
 	tx := NewNativeTransferTransaction(transferTx)
+	tx.Nonce = 1
 	assert.Nil(t, tx.Sign(privBob))
 
 	newBlock.AddTransaction(tx)
@@ -78,6 +79,7 @@ func TestSendSuccessTransfer(t *testing.T) {
 
 	tx := NewNativeTransferTransaction(transferTx)
 	tx.Fee = 200
+	tx.Nonce = 1
 	assert.Nil(t, tx.Sign(privBob))
 
 	newBlock.AddTransaction(tx)

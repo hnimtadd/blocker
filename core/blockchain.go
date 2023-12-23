@@ -103,7 +103,7 @@ func (bc *BlockChain) addBlockWithoutValidation(b *Block) error {
 		"hash", fmt.Sprintf("%x", b.Hash(BlockHasher{}).Bytes()[:3]),
 		"transactions", len(b.Transactions),
 	)
-	fmt.Println(bc.AccountState())
+	// fmt.Println(bc.AccountState())
 	return bc.store.PutBlock(b)
 }
 
@@ -156,6 +156,15 @@ func (bc *BlockChain) statusOfHeight(h uint32) Status {
 }
 
 func (bc *BlockChain) handleNatveTransaction(tx *Transaction) error {
+	fromState, err := bc.store.GetAccount(tx.From.Address())
+	if err != nil {
+		return err
+	}
+	if fromState.Nonce+1 != tx.Nonce {
+		bc.logger.Log("error", fmt.Sprintf("expected %d, given %d", fromState.Nonce+1, tx.Nonce))
+		return ErrNonceInvalid
+	}
+
 	switch tx.TxInner.(type) {
 	case MintTx:
 		if err := bc.handleNativeNFTTransaction(tx); err != nil {
@@ -209,6 +218,7 @@ func (bc *BlockChain) handleNativeTransferTransaction(tx *Transaction) error {
 	if err != nil {
 		return err
 	}
+
 	if fromState.Balance < (tx.Fee + transferTx.Value) {
 		return ErrTxInsufficientBalance
 	}
@@ -258,14 +268,10 @@ func (bc *BlockChain) SoftcheckTransactions(txx []*Transaction) []types.Hash {
 }
 
 func (bc *BlockChain) checkgeneralTransaction(tx *Transaction) error {
-	fromState, err := bc.store.GetAccount(tx.From.Address())
+	_, err := bc.store.GetAccount(tx.From.Address())
 	if err != nil {
 		bc.logger.Log("tx", err)
 		return err
-	}
-	if fromState.Nonce+1 != tx.Nonce {
-		bc.logger.Log("error", fmt.Sprintf("expected %d, given %d", fromState.Nonce+1, tx.Nonce))
-		return ErrNonceInvalid
 	}
 	return nil
 }
@@ -314,14 +320,18 @@ func (bc *BlockChain) AccountState() string {
 	return bc.store.AccountStateString()
 }
 
-func (bc *BlockChain) GetAccount(addr types.Address) (*AccountState, []*Transaction, []*Transaction, error) {
+func (bc *BlockChain) GetAccountState(addr types.Address) (*AccountState, error) {
 	state, err := bc.store.GetAccount(addr)
 	if err != nil {
-		return nil, nil, nil, err
+		return nil, err
 	}
+	return state, nil
+}
+
+func (bc *BlockChain) GetAccountTransferTransactions(addr types.Address) ([]*Transaction, []*Transaction, error) {
 	fromTxx, toTxx, err := bc.store.GetTransferOfAccount(addr)
 	if err != nil {
-		return nil, nil, nil, err
+		return nil, nil, err
 	}
-	return state, fromTxx, toTxx, nil
+	return fromTxx, toTxx, nil
 }

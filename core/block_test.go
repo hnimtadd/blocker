@@ -78,14 +78,13 @@ func TestEncodeDecodeBlock(t *testing.T) {
 
 func RandomBlock(t *testing.T, height uint32, prevBlockHash types.Hash) *Block {
 	privKey := crypto.GeneratePrivateKey()
-	tx := RandomTxWithSignature(t)
 	h := &Header{
 		Version:       1,
 		PrevBlockHash: prevBlockHash,
 		Timestamp:     time.Now().UnixNano(),
 		Height:        height,
 	}
-	b, err := NewBlock(h, []*Transaction{tx})
+	b, err := NewBlock(h, []*Transaction{})
 	assert.Nil(t, err)
 
 	dataHash, err := CalculateDataHash(b.Transactions)

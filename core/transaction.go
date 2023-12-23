@@ -7,6 +7,7 @@ import (
 	"encoding/binary"
 	"fmt"
 	"math/rand"
+	"time"
 )
 
 type (
@@ -21,14 +22,16 @@ const (
 
 type Transaction struct {
 	// Maybe a native wrapper for any txInner or any state code that run on vm
-	From      *crypto.PublicKey
-	Signature *crypto.Signature
-	TxInner   any
-	Data      []byte
-	timeStamp int64      // UNIX Nano, first time this transaction be seen locally
-	hash      types.Hash // Cached hash version of transaction
-	Fee       uint64
-	Nonce     uint64
+	From       *crypto.PublicKey
+	Signature  *crypto.Signature
+	TxInner    any
+	Data       []byte
+	timeStamp  int64      // UNIX Nano, first time this transaction be seen locally
+	hash       types.Hash // Cached hash version of transaction
+	ValidFrom  int64      // unixnano
+	ValidUntil int64      // unixnano
+	Fee        uint64
+	Nonce      uint64
 }
 
 func (t Transaction) String() string {
@@ -36,7 +39,24 @@ func (t Transaction) String() string {
 	if t.From != nil {
 		from = t.From.Address().String()
 	}
-	return fmt.Sprintf("%s=>[from=%s, Nonce=%v, fee=%v, timestamp=%v]\n", t.Hash(TxHasher{}).Short(), from, t.Nonce, t.Fee, t.timeStamp)
+	validFrom := "instance"
+	if t.ValidFrom != 0 {
+		validFrom = time.Until(time.Unix(0, t.ValidFrom)).String()
+	}
+	validTo := "forever"
+	if t.ValidUntil != 0 {
+		validTo = time.Until(time.Unix(0, t.ValidUntil)).String()
+	}
+	return fmt.Sprintf(
+		"%s=>[from=%s, Nonce=%v, fee=%v, timestamp=%v, validFrom=%v, validUntil=%v]",
+		t.Hash(TxHasher{}).Short(),
+		from,
+		t.Nonce,
+		t.Fee,
+		t.timeStamp,
+		validFrom,
+		validTo,
+	)
 }
 
 // NewNativeTransaction is deprecated, transaction should be created from account
