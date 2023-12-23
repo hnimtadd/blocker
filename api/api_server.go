@@ -36,6 +36,7 @@ func (s *Server) initRoute() *echo.Echo {
 	app.POST("/api/tx", s.SendTransactionHandler)
 	app.GET("/api/tx/:hash", s.GetTransactionWithHashHandler)
 	app.POST("/api/account/register", s.RegisterNewAccountStateHandler)
+	app.GET("/api/account/:hash", s.GetAccountStateHandler)
 	return app
 }
 

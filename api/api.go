@@ -60,6 +60,21 @@ func toJSONBlock(block *core.Block) (JSONBlock, error) {
 	for _, tx := range block.Transactions {
 		txx = append(txx, tx.Hash(core.TxHasher{}).String())
 	}
+
+	// genesis block
+	if block.Height == 0 {
+		return JSONBlock{
+			Hash:          block.Hash(core.BlockHasher{}).String(),
+			DataHash:      block.DataHash.String(),
+			PrevBlockHash: block.PrevBlockHash.String(),
+			Validator:     "genesis",
+			Signature:     "genesis",
+			Txx:           txx,
+			Height:        block.Height,
+			Version:       block.Version,
+		}, nil
+	}
+
 	return JSONBlock{
 		Hash:          block.Hash(core.BlockHasher{}).String(),
 		DataHash:      block.DataHash.String(),
@@ -211,4 +226,45 @@ func (s *Server) RegisterNewAccountStateHandler(c echo.Context) error {
 		return c.JSON(http.StatusBadRequest, echo.Map{"error": err.Error()})
 	}
 	return nil
+}
+
+func (s *Server) GetAccountStateHandler(c echo.Context) error {
+	addrString := c.Param("hash")
+
+	if addrString == "" {
+		return c.JSON(http.StatusBadRequest, echo.Map{"errors": "invalid hash"})
+	}
+	// check from txPool if tx is denided
+	addrBytes, err := hex.DecodeString(addrString)
+	if err != nil {
+		return c.JSON(http.StatusBadRequest, echo.Map{"errors": fmt.Sprintf("cannot decode hash given hahs, (%s)", err.Error())})
+	}
+	addr := types.AddressFromBytes(addrBytes)
+
+	state, fromTxx, toTxx, err := s.chain.GetAccount(addr)
+	if err != nil {
+		return c.String(http.StatusNotFound, fmt.Sprintf("cannot get account state from blockchain: %s", err.Error()))
+	}
+
+	fromTXXString := []string{}
+	for _, tx := range fromTxx {
+		fromTXXString = append(fromTXXString, tx.Hash(core.TxHasher{}).String())
+	}
+	toTxxString := []string{}
+	for _, tx := range toTxx {
+		toTxxString = append(toTxxString, tx.Hash(core.TxHasher{}).String())
+	}
+	fmt.Println("==================")
+	fmt.Println(state)
+	fmt.Println("==================")
+	return c.JSON(
+		http.StatusOK, echo.Map{
+			"state": echo.Map{
+				"addr":    state.Addr.String(),
+				"balance": state.Balance,
+				"nonce":   state.Nonce,
+			},
+			"outcomeTransactions": fromTXXString,
+			"incomeTransactions":  toTxxString,
+		})
 }
