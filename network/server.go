@@ -4,6 +4,8 @@ import (
 	"blocker/api"
 	"blocker/core"
 	"blocker/crypto"
+	"blocker/pool"
+	"blocker/types"
 	"bytes"
 	"fmt"
 	"net"
@@ -14,11 +16,12 @@ import (
 )
 
 const (
-	defaultMaxPoolLen = 10
+	defaultMaxPoolLen = 50
 	defaultBlockTime  = 5 * time.Second
 )
 
 type ServerOptions struct {
+	// RootAccount   core.Account
 	Transport     Transport
 	Logger        log.Logger
 	Addr          string // if addr not empty, mean that this node could be API server
@@ -38,8 +41,9 @@ type Server struct {
 	peerCh        <-chan Peer // Read-only peer chan from transport
 	rpcCh         <-chan RPC  // Read-only rpc chan from Transport
 	chain         *core.BlockChain
-	memPool       *TxPool
+	memPool       *pool.TxPool
 	quitCh        chan struct{}
+	Storage       core.Storage // cached storage, different than chain storage
 	txChan        chan *core.Transaction
 	ServerOptions               // Embed ServerOptions
 	blockTime     time.Duration // duration of generating new blokc
@@ -60,15 +64,15 @@ func NewServer(opts ServerOptions) (*Server, error) {
 	if opts.MaxPoolLen == 0 {
 		opts.MaxPoolLen = defaultMaxPoolLen
 	}
-	chain, err := core.NewBlockChain(core.NewGenesisBlock(), core.NewInMemoryStorage(), opts.Logger)
+	chain, err := core.NewBlockChain(Genesis(), core.NewInMemoryStorage(), opts.Logger)
 	if err != nil {
 		return nil, err
 	}
-
 	sv := &Server{
 		ServerOptions: opts,
 		blockTime:     bt,
-		memPool:       NewTxPool(opts.MaxPoolLen),
+		Storage:       core.NewInMemoryStorage(),
+		memPool:       pool.NewTxPool(opts.MaxPoolLen),
 		chain:         chain,
 		isValidator:   opts.PrivKey != nil,
 		quitCh:        make(chan struct{}, 1),
@@ -149,7 +153,8 @@ func (s *Server) validatorLoop() {
 		select {
 		case <-ticker.C:
 			if err := s.createNewBlock(); err != nil {
-				s.Logger.Log("err", err)
+				s.Logger.Log("error", err)
+				// panic(err)
 			}
 		default:
 			continue
@@ -201,8 +206,7 @@ func (s *Server) processTransaction(tx *core.Transaction) error {
 		}
 	}()
 
-	s.memPool.Add(tx)
-	return nil
+	return s.memPool.Add(tx)
 }
 
 func (s *Server) broadcastTx(tx *core.Transaction) error {
@@ -215,6 +219,7 @@ func (s *Server) broadcastTx(tx *core.Transaction) error {
 }
 
 func (s *Server) processBlock(b *core.Block) error {
+	// TODO: if the block is higher than the current blockchain, sync block, add currently txx in the orphan block to into the memPool again
 	if err := s.chain.AddBlock(b); err != nil {
 		return err
 	}
@@ -301,13 +306,47 @@ func (s *Server) processStatusMessage(from NetAddr, data *StatusMessage) error {
 }
 
 func (s *Server) createNewBlock() error {
+	// minter work
 	currentHeader, err := s.chain.GetHeader(s.chain.Height())
 	if err != nil {
 		return err
 	}
 
 	// Should get out current pending transactions in queue
+	// pending and remove pending maybe remove unprocessed transaction
 	txx := s.memPool.Pending()
+	s.memPool.LockPending()
+	fmt.Println("==========PENDING-TRANSACTION=============")
+	for _, tx := range txx {
+		s.Logger.Log("pending", tx.String())
+	}
+	fmt.Println("==========END-PENDING-TRANSACTION=============")
+	idxx := s.chain.SoftcheckTransactions(txx)
+	if len(idxx) > 0 {
+		denidedTXX := s.memPool.Denide(idxx)
+
+		s.memPool.UnlockPending()
+		txx = s.memPool.Pending()
+		s.memPool.LockPending()
+
+		fmt.Println("==========DENIDED-TRANSACTION=============")
+		for _, tx := range denidedTXX {
+			s.Logger.Log("denided", tx.String())
+		}
+
+		fmt.Println("==========END-DENIDED-TRANSACTION=============")
+
+		fmt.Println("==========PROCESSED-TRANSACTION=============")
+		for _, tx := range txx {
+			s.Logger.Log("processed", tx.String())
+		}
+		fmt.Println("==========END-PROCESSED-TRANSACTION=============")
+
+		fmt.Println("==========ACCOUNT-STATE==========")
+		fmt.Println(s.chain.AccountState())
+		fmt.Println("==========END-ACCOUNT-STATE==========")
+	}
+
 	block, err := core.NewBlockFromPrevHeader(currentHeader, txx)
 	if err != nil {
 		return err
@@ -325,15 +364,10 @@ func (s *Server) createNewBlock() error {
 			s.Logger.Log("error", err.Error())
 		}
 	}()
-	s.memPool.ClearPending()
+
+	s.memPool.Processed(txx)
 	return nil
 }
-
-// func (s *Server) bootstrapNetwork() {
-// 	for _, peer := range s.LocalSeed {
-// 		s.peerCh <- peer
-// 	}
-// }
 
 func (s *Server) bootstrapTCPNetwork() {
 	for _, addr := range s.TCPSeed {
@@ -348,4 +382,30 @@ func (s *Server) sendGetStatusMessage(toPeer Peer) error {
 	msg := NewMesage(MessageTypeRequestStatus, requestMessage.Bytes())
 	s.Logger.Log("action", "send get status message", "to", toPeer.Addr())
 	return s.Transport.Send(toPeer.Addr(), msg.Bytes())
+}
+
+func Genesis() *core.Block {
+	// coinbase := core.Account{}
+	transferTx := core.TransferTx{
+		From:  types.Address{},
+		To:    types.Address{},
+		Value: 1000000,
+	}
+
+	tx := &core.Transaction{
+		TxInner: transferTx,
+		Nonce:   0,
+	}
+	block := &core.Block{
+		Header: &core.Header{
+			Version:       1,
+			PrevBlockHash: types.Hash{},
+			Height:        0,
+			Timestamp:     00000000,
+		},
+		Transactions: []*core.Transaction{
+			tx,
+		},
+	}
+	return block
 }

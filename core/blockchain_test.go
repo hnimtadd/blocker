@@ -1,17 +1,98 @@
 package core
 
 import (
+	"blocker/crypto"
 	"blocker/types"
+	"fmt"
 	"testing"
+	"time"
 
 	"github.com/go-kit/log"
 	"github.com/stretchr/testify/assert"
 )
 
-func TestBlockChain(t *testing.T) {
+func TestSendInsuffienceTransfer(t *testing.T) {
 	bc := newBlockChainWithGenesis(t)
-	assert.NotNil(t, bc.validator)
-	assert.Equal(t, bc.Height(), uint32(0))
+	validator := crypto.GeneratePrivateKey()
+	privBob := crypto.GeneratePrivateKey()
+	priveAlice := crypto.GeneratePrivateKey()
+	// privHacker := crypto.GeneratePrivateKey()
+	assert.Nil(t, bc.store.PutAccount(NewAccountState(privBob.Public())))
+	assert.Nil(t, bc.store.PutAccount(NewAccountState(priveAlice.Public())))
+
+	fmt.Println(bc.store.AccountStateString())
+
+	prevHeader, err := bc.GetHeader(0)
+	assert.Nil(t, err)
+	assert.NotNil(t, prevHeader)
+
+	newBlock := RandomBlock(t, 1, BlockHasher{}.Hash(prevHeader))
+
+	amount := uint64(100)
+	transferTx := TransferTx{
+		From:  privBob.Public().Address(),
+		To:    priveAlice.Public().Address(),
+		Value: amount,
+	}
+	assert.Nil(t, transferTx.Sign(privBob))
+
+	tx := NewNativeTransferTransaction(transferTx)
+	tx.Nonce = 1
+	assert.Nil(t, tx.Sign(privBob))
+
+	newBlock.AddTransaction(tx)
+	assert.Nil(t, newBlock.ReHash(BlockHasher{}))
+	assert.Nil(t, newBlock.Sign(validator))
+
+	err = bc.AddBlock(newBlock)
+	assert.NotNil(t, err)
+	assert.Equal(t, ErrTxInsufficientBalance, err)
+	fmt.Println(bc.store.AccountStateString())
+}
+
+func TestSendSuccessTransfer(t *testing.T) {
+	bc := newBlockChainWithGenesis(t)
+	validator := crypto.GeneratePrivateKey()
+	privBob := crypto.GeneratePrivateKey()
+	priveAlice := crypto.GeneratePrivateKey()
+	// privHacker := crypto.GeneratePrivateKey()
+	BobState := NewAccountState(privBob.Public())
+	BobState.Balance = 1000
+
+	assert.Nil(t, bc.store.PutAccount(BobState))
+	assert.Nil(t, bc.store.PutAccount(NewAccountState(priveAlice.Public())))
+	fmt.Println(bc.store.AccountStateString())
+
+	prevHeader, err := bc.GetHeader(0)
+	assert.Nil(t, err)
+	assert.NotNil(t, prevHeader)
+
+	newBlock := RandomBlock(t, 1, BlockHasher{}.Hash(prevHeader))
+
+	amount := uint64(100)
+	transferTx := TransferTx{
+		From:  privBob.Public().Address(),
+		To:    priveAlice.Public().Address(),
+		Value: amount,
+	}
+	assert.Nil(t, transferTx.Sign(privBob))
+
+	tx := NewNativeTransferTransaction(transferTx)
+	tx.Fee = 200
+	tx.Nonce = 1
+	assert.Nil(t, tx.Sign(privBob))
+
+	newBlock.AddTransaction(tx)
+	assert.Nil(t, newBlock.ReHash(BlockHasher{}))
+	assert.Nil(t, newBlock.Sign(validator))
+
+	assert.Nil(t, bc.AddBlock(newBlock))
+
+	fmt.Println(bc.store.AccountStateString())
+}
+
+func TestBlockChain(t *testing.T) {
+	newBlockChainWithGenesis(t)
 }
 
 func TestHasBlock(t *testing.T) {
@@ -26,6 +107,7 @@ func TestNotSignBlock(t *testing.T) {
 	block := RandomBlock(t, uint32(1), types.RandomHash())
 	assert.NotNil(t, bc.AddBlock(block))
 }
+
 func TestBlockWithNotSignTx(t *testing.T) {
 	bc := newBlockChainWithGenesis(t)
 	assert.True(t, bc.HasBlock(0))
@@ -104,8 +186,35 @@ func TestAddBlockWithInvalidPrevHash(t *testing.T) {
 	}
 }
 
+func newGenesisBlock() *Block {
+	// coinbase := core.Account{}
+	transferTx := TransferTx{
+		From:  types.Address{},
+		To:    types.Address{},
+		Value: 1000000,
+	}
+	tx := NewNativeTransferTransaction(transferTx)
+
+	block := &Block{
+		Header: &Header{
+			Version:       1,
+			PrevBlockHash: types.Hash{},
+			Height:        0,
+			Timestamp:     00000000,
+		},
+		Transactions: []*Transaction{
+			tx,
+		},
+	}
+	return block
+}
+
 func newBlockChainWithGenesis(t *testing.T) *BlockChain {
-	bc, err := NewBlockChain(RandomBlock(t, 0, types.RandomHash()), NewInMemoryStorage(), log.NewNopLogger())
+	fmt.Println("===>", time.Now().Unix())
+	block := newGenesisBlock()
+	fmt.Println("===>", time.Now().Unix())
+	bc, err := NewBlockChain(block, NewInMemoryStorage(), log.NewNopLogger())
+	fmt.Println("===>", time.Now().Unix())
 	assert.Nil(t, err)
 	assert.NotNil(t, bc.validator)
 	assert.Equal(t, bc.Height(), uint32(0))

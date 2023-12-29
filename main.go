@@ -4,35 +4,42 @@ import (
 	"blocker/core"
 	"blocker/crypto"
 	"blocker/network"
+	"blocker/types"
+	"blocker/wallet"
 	"bytes"
-	"net/http"
+	"math/rand"
+	"strconv"
 	"time"
 )
 
 func main() {
 	trLocal := network.NewTCPTransport("LOCAL", ":3000")
-	trRemoteA := network.NewTCPTransport("REMOTE_A", ":3001")
 
 	go func() {
-		// Late node
-		time.Sleep(time.Second * 10)
-		serverA := makeTCPServer(trRemoteA, []string{":3000"}, nil)
-		serverA.Start()
-	}()
-
-	txPostTicker := time.NewTicker(time.Millisecond * 500)
-
-	go func() {
+		txPostTicker := time.NewTicker(time.Second * 3)
+		time.Sleep(time.Second * 2)
+		w := wallet.NewWallet(crypto.GeneratePrivateKey())
 		for {
-			if err := sendTransaction(); err != nil {
+			if err := sendMintTransaction(w); err != nil {
 				panic(err)
 			}
 			<-txPostTicker.C
 		}
 	}()
 
+	go func() {
+		from := crypto.GeneratePrivateKey()
+		w := wallet.NewWallet(from)
+		to := crypto.GeneratePrivateKey()
+		txPostTicker := time.NewTicker(time.Second * 6)
+		time.Sleep(time.Second * 2)
+		if err := sendTransferTransaction(w, to.Public(), 10, txPostTicker); err != nil {
+			panic(err)
+		}
+	}()
+
 	privKey := crypto.GeneratePrivateKey()
-	server := makeServer(":8080", trLocal, []network.Peer{}, privKey)
+	server := makeServer("localhost:8080", trLocal, []network.Peer{}, privKey)
 	server.Start()
 }
 
@@ -67,7 +74,7 @@ func makeServer(apiAddr string, node network.Transport, seed []network.Peer, pri
 
 func sendLocalTransaction(to network.Transport, from network.Transport) error {
 	data := []byte{0x01, 0x0a, 0x02, 0x0a, 0x0b}
-	tx := core.NewTransaction(data)
+	tx := core.NewNativeTransaction(data)
 	privKey := crypto.GeneratePrivateKey()
 	tx.Sign(privKey)
 	buf := &bytes.Buffer{}
@@ -80,23 +87,29 @@ func sendLocalTransaction(to network.Transport, from network.Transport) error {
 	return err
 }
 
-func sendTransaction() error {
+func sendDataTransaction() error {
 	from := crypto.GeneratePrivateKey()
+	w := wallet.NewWallet(from)
 	data := []byte{0x01, 0x0a, 0x02, 0x0a, 0x0b}
-	tx := core.NewTransaction(data)
-	if err := tx.Sign(from); err != nil {
-		return err
-	}
-	buf := &bytes.Buffer{}
-	if err := tx.Encode(core.NewGobTxEncoder(buf)); err != nil {
-		return err
-	}
+	return w.DataTransaction(data, 0)
+}
 
-	req, err := http.NewRequest("POST", "http://localhost:8080/api/tx", buf)
-	if err != nil {
-		panic(err)
+func sendMintTransaction(from *wallet.Wallet) error {
+	rand := rand.New(rand.NewSource(time.Now().UnixNano()))
+	randInt := strconv.Itoa(rand.Int())
+	return from.NFTMintTransaction(
+		core.NFTAssetTypeImageBase64,
+		[]byte(randInt),
+		types.Hash{},
+		map[string]any{"name": "hello"},
+		0)
+}
+
+func sendTransferTransaction(from *wallet.Wallet, to *crypto.PublicKey, amount uint64, ticker *time.Ticker) error {
+	for {
+		<-ticker.C
+		if err := from.TransferTransaction(to.Address(), amount, 50); err != nil {
+			return err
+		}
 	}
-	client := http.Client{}
-	_, err = client.Do(req)
-	return err
 }

@@ -18,7 +18,7 @@ const (
 )
 
 type PrivateKey struct {
-	key ed25519.PrivateKey
+	Key ed25519.PrivateKey
 }
 
 func GeneratePrivateKeyFromString(str string) *PrivateKey {
@@ -27,7 +27,7 @@ func GeneratePrivateKeyFromString(str string) *PrivateKey {
 		panic(fmt.Sprintf("Cannot decode string to seed: %v", err))
 	}
 	return &PrivateKey{
-		key: ed25519.NewKeyFromSeed(seed),
+		Key: ed25519.NewKeyFromSeed(seed),
 	}
 }
 
@@ -36,7 +36,7 @@ func GeneratePrivateKeyWithSeed(seed []byte) *PrivateKey {
 		panic(fmt.Sprintf("Seed length not valid, must be %d", seedLen))
 	}
 	return &PrivateKey{
-		key: ed25519.NewKeyFromSeed(seed),
+		Key: ed25519.NewKeyFromSeed(seed),
 	}
 }
 
@@ -47,23 +47,23 @@ func GeneratePrivateKey() *PrivateKey {
 		panic(err)
 	}
 	return &PrivateKey{
-		key: ed25519.NewKeyFromSeed(seed),
+		Key: ed25519.NewKeyFromSeed(seed),
 	}
 }
 
 func (p *PrivateKey) Bytes() []byte {
-	return p.key
+	return p.Key
 }
 
 func (p *PrivateKey) Sign(msg []byte) *Signature {
 	return &Signature{
-		Value: ed25519.Sign(p.key, msg),
+		Value: ed25519.Sign(p.Key, msg),
 	}
 }
 
 func (p *PrivateKey) Public() *PublicKey {
 	b := make([]byte, pubKeyLen)
-	copy(b, p.key[32:])
+	copy(b, p.Key[32:])
 
 	return &PublicKey{
 		Key: b,

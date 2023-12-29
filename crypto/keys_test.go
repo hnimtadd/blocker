@@ -52,9 +52,7 @@ func TestKeyFromString(t *testing.T) {
 }
 
 func TestKeyFromSeed(t *testing.T) {
-	var (
-		seedString = "70e8b2282a89475436a50e13e94839b565f25d138eac87cbfee1bf3cca85d22d"
-	)
+	seedString := "70e8b2282a89475436a50e13e94839b565f25d138eac87cbfee1bf3cca85d22d"
 	seed, err := hex.DecodeString(seedString)
 	assert.NoError(t, err)
 	assert.NotEqual(t, len(seed), 0)
@@ -65,5 +63,4 @@ func TestKeyFromSeed(t *testing.T) {
 		address = "0393f29f09c56a1d108a3ba1a9adbba889eddaa1"
 	)
 	assert.Equal(t, address, pubKey.Address().String())
-
 }

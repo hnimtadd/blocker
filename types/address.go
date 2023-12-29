@@ -17,7 +17,6 @@ func AddressFromBytes(b []byte) Address {
 		value[i] = b[i]
 	}
 	return Address(value)
-
 }
 
 func (a Address) String() string {
@@ -30,4 +29,13 @@ func (a Address) Bytes() []byte {
 		b[i] = a[i]
 	}
 	return b
+}
+
+func (a Address) IsZero() bool {
+	for i := 0; i < 20; i++ {
+		if a[i] != 0 {
+			return false
+		}
+	}
+	return true
 }

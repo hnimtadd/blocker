@@ -29,13 +29,10 @@ func (h *Header) Bytes() []byte {
 
 type Block struct {
 	*Header
-	Validator *crypto.PublicKey
-	Signature *crypto.Signature
-
+	Validator    *crypto.PublicKey
+	Signature    *crypto.Signature
 	Transactions []*Transaction
-
-	// Cached version of the header hash
-	hash types.Hash
+	hash         types.Hash // Cached version of the header hash
 }
 
 func NewGenesisBlock() *Block {
@@ -122,6 +119,17 @@ func (b *Block) Hash(hasher Hasher[*Header]) types.Hash {
 		b.hash = hasher.Hash(b.Header)
 	}
 	return b.hash
+}
+
+// ReHash must be call after modified the block
+func (b *Block) ReHash(hasher Hasher[*Header]) error {
+	b.hash = hasher.Hash(b.Header)
+	dataHash, err := CalculateDataHash(b.Transactions)
+	if err != nil {
+		return err
+	}
+	b.DataHash = dataHash
+	return nil
 }
 
 func CalculateDataHash(txx []*Transaction) (types.Hash, error) {
